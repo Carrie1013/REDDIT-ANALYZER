@@ -1,5 +1,5 @@
 // --- Global Configuration and Utilities ---
-const apiKey = ""; // Left empty, Canvas environment will provide it
+const apiKey = "AIzaSyCmCwoPF67PRRDTGHl54mgSogctx-NbHn8"; // User-provided API key
 const llmApiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
 
 function openTab(tabId) {
@@ -364,7 +364,7 @@ async function preloadActiveTabContent() {
                 func: () => {
                     const title = document.title || '';
                     const bodyText = (document.body?.innerText || '').slice(0, 1500);
-                    return { title, content: `${bodyText}... [truncated]` };
+                    return { title, content: bodyText };
                 },
             });
             if (result?.result) {
