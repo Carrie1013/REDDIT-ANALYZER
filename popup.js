@@ -1,0 +1,385 @@
+// --- Global Configuration and Utilities ---
+const apiKey = ""; // Left empty, Canvas environment will provide it
+const llmApiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+
+function openTab(tabId) {
+    // Toggle tab content visibility
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active-tab');
+    });
+    document.getElementById(tabId).classList.add('active-tab');
+    
+    // Toggle button styles
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+        btn.classList.add('text-gray-600', 'hover:text-gray-900');
+    });
+    const activeBtn = document.getElementById(`tab-${tabId}-btn`);
+    activeBtn.classList.remove('text-gray-600', 'hover:text-gray-900');
+    activeBtn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+
+    // For the 3D page, ensure re-initialization
+    if (tabId === '3d') {
+        setTimeout(init3D, 50); // Delay to ensure container is rendered
+    }
+}
+
+/**
+ * Simulates base index calculation
+ * @param {string} title Post title
+ * @param {number} pScore Community Professionalism Score (1-10)
+ * @param {number} votes Votes count
+ * @param {number} comments Comments count
+ * @param {number} priceDrop Price drop (%) (negative value)
+ */
+function calculateMetricSet(title, pScore, votes, comments, priceDrop) {
+    // 1. Confidence Erosion Index (CEI) - Simplified: uses specific keywords
+    const doubtKeywords = ['factor', 'still', 'dead', 'relevance', 'fade'];
+    let titleWordCount = title.split(/\s+/).length;
+    let doubtCount = doubtKeywords.filter(keyword => title.toLowerCase().includes(keyword)).length;
+    const CEI = (doubtCount / titleWordCount) * (pScore / 10); // Combines with professionalism
+
+    // 2. Sentiment Inversion Degree (SID) - Dark Humor
+    // Assuming the literal optimism of terms like "Black Friday Sale" is 0.8
+    let S_literal = 0.0;
+    if (title.toLowerCase().includes('sale') || title.toLowerCase().includes('black friday')) {
+        S_literal = 0.8; 
+    } else if (title.toLowerCase().includes('waiting')) {
+        S_literal = 0.1; // Slightly positive, but more of a complaint
+    }
+
+    // Market background pessimism B_market: Price drop percentage / 20 (normalized)
+    const B_market = Math.max(-1, priceDrop / 20); 
+    const SID = Math.abs(S_literal - B_market); // Absolute difference
+
+    // 3. Interaction Efficiency (Comment/Vote Ratio)
+    const CVR = votes > 0 ? comments / votes : comments;
+
+    return { CEI, SID, CVR };
+}
+
+// --- 1. LLM Page Summary ---
+
+/**
+ * Calls Gemini API to generate a summary of the page content
+ */
+async function summarizePage() {
+    const content = document.getElementById('page-content').value;
+    const resultDiv = document.getElementById('summary-text');
+    const button = document.getElementById('summarize-btn');
+
+    if (!content) {
+        resultDiv.innerHTML = '<span class="text-red-500">Please enter text content for summarization.</span>';
+        return;
+    }
+
+    resultDiv.innerHTML = '<span class="text-blue-500">Calling LLM for summary, please wait...</span>';
+    button.disabled = true;
+
+    const systemPrompt = "You are a senior financial market analyst. Based on the Reddit content provided by the user, briefly summarize the core discussion points, market sentiment (positive/negative/sarcastic), and potential information value in English. The summary should be concise.";
+    const userQuery = `Summarize the following Reddit content:\n\n"${content}"`;
+
+    const payload = {
+        contents: [{ parts: [{ text: userQuery }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+    };
+
+    // Exponential backoff retry logic
+    for (let i = 0; i < 3; i++) {
+        try {
+            const response = await fetch(llmApiUrl + `?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "LLM returned empty result.";
+            resultDiv.textContent = text;
+            break; 
+
+        } catch (error) {
+            console.error("LLM API call failed:", error);
+            if (i === 2) {
+                resultDiv.innerHTML = `<span class="text-red-500">LLM summarization failed. Error: ${error.message}</span>`;
+            }
+            await new Promise(resolve => setTimeout(resolve, 2000 * Math.pow(2, i))); // Exponential backoff
+        }
+    }
+    button.disabled = false;
+}
+
+// --- 2. 3D Structure Visualization ---
+
+let scene, camera, renderer, container;
+const data = [
+    // Mock Reddit comment data (Level, Hotness, Length)
+    { level: 1, hotness: 0.8, length: 15, x: -10, z: -10 },
+    { level: 2, hotness: 0.5, length: 30, x: -5, z: -5 },
+    { level: 3, hotness: 0.2, length: 60, x: 0, z: 0 },
+    { level: 1, hotness: 0.9, length: 5, x: 10, z: 10 },
+    { level: 2, hotness: 0.7, length: 25, x: 5, z: 5 },
+    { level: 3, hotness: 0.6, length: 45, x: 15, z: 15 },
+    { level: 4, hotness: 0.1, length: 100, x: 20, z: 20 },
+];
+
+/**
+ * Initializes the 3D scene
+ */
+function init3D() {
+    // Clean up old canvas elements
+    container = document.getElementById('visualization-container');
+    if (!container) return;
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1f2937); // Dark gray background
+
+    camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    // Ensure adaptation on window resize (simulating responsiveness)
+    window.addEventListener('resize', onWindowResize, false);
+    function onWindowResize() {
+        if(container.offsetParent === null) return; // Don't process if container is not visible
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+    
+    // Add lighting
+    const light = new THREE.DirectionalLight(0xffffff, 3);
+    light.position.set(1, 1, 1);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+
+    // Add ground grid
+    const gridHelper = new THREE.GridHelper(50, 50, 0x4a5568, 0x2d3748);
+    scene.add(gridHelper);
+
+    // Create visualization
+    createDataVisualization();
+
+    camera.position.set(20, 30, 40);
+    camera.lookAt(0, 0, 0);
+
+    animate();
+}
+
+/**
+ * Creates 3D objects based on mock data
+ */
+function createDataVisualization() {
+    // Remove previous objects
+    scene.children.filter(obj => obj.isMesh).forEach(obj => scene.remove(obj));
+
+    const maxLevel = Math.max(...data.map(d => d.level));
+    const maxLength = Math.max(...data.map(d => d.length));
+    const barWidth = 2;
+
+    data.forEach(item => {
+        // Height (Level): Reflects comment depth
+        const height = (item.level / maxLevel) * 15 + 1; // Scaled height
+
+        // Color (Hotness): From blue (low hotness) to red (high hotness)
+        const color = new THREE.Color(0x0000ff);
+        color.lerp(new THREE.Color(0xff0000), item.hotness);
+
+        // Width/Depth (Length): Reflects text length
+        const widthDepth = (item.length / maxLength) * barWidth + 0.5;
+
+        const geometry = new THREE.BoxGeometry(widthDepth, height, widthDepth);
+        const material = new THREE.MeshPhongMaterial({ color: color });
+        const cube = new THREE.Mesh(geometry, material);
+
+        // Position: Horizontal distribution
+        cube.position.x = item.x;
+        cube.position.y = height / 2; // Position cube base on the ground
+        cube.position.z = item.z;
+
+        scene.add(cube);
+    });
+}
+
+/**
+ * 3D animation loop
+ */
+function animate() {
+    // Run animation only when container is visible
+    if (container && container.offsetParent !== null) {
+        requestAnimationFrame(animate);
+        
+        // Simple rotation effect
+        scene.rotation.y += 0.005;
+
+        renderer.render(scene, camera);
+    }
+}
+
+// --- 3. Non-Traditional Signal Analysis ---
+
+/**
+ * Calculates and displays non-traditional investment signals
+ */
+function calculateSignals() {
+    const dataInput = document.getElementById('signal-data').value;
+    const lines = dataInput.trim().split('\n');
+
+    let totalCDI = 0;
+    let totalSID = 0;
+    let count = 0;
+
+    // Mock data for Community Dispersion Index (CDI)
+    const subreddits = [
+        { name: 'r/dogecoin', isCore: true, professional: 4 },
+        { name: 'r/Accenture_AFS', isCore: false, professional: 9 },
+        { name: 'r/WallStreetBetsCrypto', isCore: false, professional: 7 },
+        { name: 'r/DJT_Uncensored', isCore: false, professional: 3 },
+        { name: 'r/BlueskySkeets', isCore: false, professional: 3 },
+    ];
+    // P_score in mock data is used as a proxy for subreddits[i].professional
+    const allPscores = lines.map(line => parseFloat(line.split(',')[1].trim()));
+    const uniquePscores = [...new Set(allPscores)].filter(p => p > 0);
+    
+    // 1. Community Dispersion Index (CDI) - Based on unique Professionalism Scores
+    const P_core = lines.filter(line => parseFloat(line.split(',')[1].trim()) <= 4).length / lines.length;
+    const CDI = uniquePscores.length * (1 - P_core);
+    
+    document.getElementById('cdi-value').textContent = CDI.toFixed(2);
+    if (CDI > 2.5) {
+        document.getElementById('cdi-desc').textContent = "High Dispersion: Discussion spills over into multiple professional communities. Signal of rising mainstream attention.";
+        document.getElementById('result-cdi').classList.add('bg-green-100', 'border-green-300');
+    } else {
+        document.getElementById('cdi-desc').textContent = "Low Dispersion: Discussion is concentrated in core communities, low signal spillover.";
+        document.getElementById('result-cdi').classList.remove('bg-green-100', 'border-green-300');
+    }
+
+    // 2. Sentiment Inversion Degree (SID)
+    lines.forEach(line => {
+        const parts = line.split(',').map(p => p.trim());
+        if (parts.length === 5) {
+            const [title, pScoreStr, votesStr, commentsStr, priceDropStr] = parts;
+            const pScore = parseFloat(pScoreStr);
+            const votes = parseInt(votesStr);
+            const comments = parseInt(commentsStr);
+            const priceDrop = parseFloat(priceDropStr);
+
+            const metrics = calculateMetricSet(title, pScore, votes, comments, priceDrop);
+            totalSID += metrics.SID;
+            count++;
+        }
+    });
+
+    const avgSID = count > 0 ? totalSID / count : 0;
+    document.getElementById('sid-value').textContent = avgSID.toFixed(2);
+
+    let finalSignal = "";
+    if (avgSID > 1.2 && CDI < 2.5) {
+        finalSignal = "Strong Capitulation Sarcasm Signal: Market is extremely pessimistic, but discussion is concentrated among retail, possibly indicating a short-term bottom.";
+        document.getElementById('result-final').classList.add('bg-red-100', 'border-red-300');
+        document.getElementById('result-sid').classList.add('bg-red-100', 'border-red-300');
+    } else if (CDI > 2.5 && avgSID < 0.5) {
+        finalSignal = "Mainstream Attention Shift Signal: Professional communities are involved, lacking dark humor, potentially indicating a narrative shift towards fundamentals.";
+        document.getElementById('result-final').classList.add('bg-green-100', 'border-green-300');
+        document.getElementById('result-sid').classList.remove('bg-red-100', 'border-red-300');
+    } else {
+        finalSignal = "Neutral/High Volatility Warning: Ambiguous signal metrics, dispersed market view, recommended observation.";
+        document.getElementById('result-final').classList.remove('bg-red-100', 'border-red-300', 'bg-green-100', 'border-green-300');
+        document.getElementById('result-sid').classList.remove('bg-red-100', 'border-red-300');
+    }
+
+    document.getElementById('final-signal').textContent = finalSignal;
+}
+
+/**
+ * Binds event listeners after the DOM is fully loaded.
+ */
+function setupEventListeners() {
+    // Tab buttons
+    document.getElementById('tab-summary-btn').addEventListener('click', () => openTab('summary'));
+    document.getElementById('tab-3d-btn').addEventListener('click', () => openTab('3d'));
+    document.getElementById('tab-signal-btn').addEventListener('click', () => openTab('signal'));
+
+    // Action buttons
+    document.getElementById('summarize-btn').addEventListener('click', summarizePage);
+    document.getElementById('calculate-signals-btn').addEventListener('click', calculateSignals);
+}
+
+// Default to open the first Tab and setup listeners
+window.onload = () => {
+    setupEventListeners();
+    preloadActiveTabContent();
+    openTab('summary');
+};
+
+/**
+ * Attempts to pull the active tab's page text via the content script and fill the textarea.
+ * Falls back silently if the page disallows scripts (e.g., Chrome Web Store/Extensions page).
+ */
+async function preloadActiveTabContent() {
+    const statusEl = document.getElementById('summary-status');
+    const textarea = document.getElementById('page-content');
+    if (!textarea) return;
+
+    const setStatus = (msg, color = 'text-gray-500') => {
+        if (!statusEl) return;
+        statusEl.className = `text-xs mb-2 ${color}`;
+        statusEl.textContent = msg;
+    };
+
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id) {
+            setStatus('Could not detect the active tab. Paste content manually.', 'text-red-500');
+            return;
+        }
+
+        // First try the injected content script path
+        let response;
+        try {
+            response = await chrome.tabs.sendMessage(tab.id, { action: 'scrapeContent' });
+        } catch (msgErr) {
+            console.warn('No content script response, trying direct scripting API:', msgErr);
+        }
+
+        if (response?.status === 'success' && response.data) {
+            const { title, content } = response.data;
+            textarea.value = `${title}\n\n${content}`;
+            setStatus('Loaded content from the active tab.', 'text-green-600');
+            return;
+        }
+
+        // Fallback: directly execute a script to grab the page text
+        try {
+            const [result] = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: () => {
+                    const title = document.title || '';
+                    const bodyText = (document.body?.innerText || '').slice(0, 1500);
+                    return { title, content: `${bodyText}... [truncated]` };
+                },
+            });
+            if (result?.result) {
+                const { title, content } = result.result;
+                textarea.value = `${title}\n\n${content}`;
+                setStatus('Loaded via scripting API.', 'text-green-600');
+                return;
+            }
+        } catch (scriptErr) {
+            console.warn('Direct scripting read failed:', scriptErr);
+        }
+
+        setStatus('No content returned. You can paste manually.', 'text-gray-500');
+    } catch (err) {
+        console.error('Failed to load tab content:', err);
+        setStatus('The page content cannot be read automatically. Please paste it manually.', 'text-red-500');
+    }
+}

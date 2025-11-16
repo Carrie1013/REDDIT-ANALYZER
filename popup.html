@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddit Quantitative Signal Analysis</title>
+    <link rel="stylesheet" href="tailwind.min.css">
+    <script src="three.min.js"></script>
+    <style>
+        /* Custom Tailwind Configuration */
+        :root {
+            font-family: 'Inter', sans-serif;
+        }
+        body {
+            width: 450px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .active-tab {
+            display: block;
+        }
+        /* Style for the 3D container */
+        #visualization-container {
+            width: 100%;
+            height: 300px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            background-color: #1f2937; /* Dark background */
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 p-4 w-[450px]">
+
+    <h1 class="text-2xl font-bold mb-4 text-gray-800 border-b pb-2">Reddit Quantitative Investment Signal Analysis Tool</h1>
+
+    <!-- Tab Navigation -->
+    <div class="flex border-b border-gray-200 mb-4">
+        <button id="tab-summary-btn" class="tab-btn py-2 px-4 text-sm font-medium text-center text-white bg-blue-600 rounded-t-lg hover:bg-blue-700 transition duration-150">
+            Page Summary (LLM)
+        </button>
+        <button id="tab-3d-btn" class="tab-btn py-2 px-4 text-sm font-medium text-center text-gray-600 rounded-t-lg hover:text-gray-900 transition duration-150">
+            3D Structure Visualization
+        </button>
+        <button id="tab-signal-btn" class="tab-btn py-2 px-4 text-sm font-medium text-center text-gray-600 rounded-t-lg hover:text-gray-900 transition duration-150">
+            Non-Traditional Signal Analysis
+        </button>
+    </div>
+
+    <!-- 1. Page Summary (LLM) -->
+    <div id="summary" class="tab-content active-tab p-2 bg-white rounded-lg shadow">
+        <h2 class="text-lg font-semibold mb-2 text-gray-700">LLM Page Content Summary</h2>
+        <div class="mb-4">
+            <label for="page-content" class="block text-sm font-medium text-gray-700 mb-1">
+                Mock Page Text (e.g., Reddit Post Content):
+            </label>
+            <p id="summary-status" class="text-xs text-gray-500 mb-2">Trying to load the active tab content automatically...</p>
+            <textarea id="page-content" rows="5" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Paste the content of the current Reddit post or search results...">
+DOGE early Black Friday sale 👀. The community is still discussing whether DOGE is still a factor, given the recent -15% drop. Most comments are short and use lots of emojis. We need to check the long-term relevance.
+            </textarea>
+        </div>
+        
+        <button id="summarize-btn" class="w-full py-2 px-4 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition duration-150">
+            Generate Summary
+        </button>
+
+        <div id="summary-result" class="mt-4 p-3 bg-gray-100 rounded-lg border border-gray-200">
+            <p class="text-sm text-gray-600" id="summary-text">Summary results will appear here.</p>
+        </div>
+    </div>
+
+    <!-- 2. 3D Structure Visualization -->
+    <div id="3d" class="tab-content p-2 bg-white rounded-lg shadow">
+        <h2 class="text-lg font-semibold mb-2 text-gray-700">3D Structure Visualization (Level/Hotness/Length)</h2>
+        <p class="text-sm text-gray-500 mb-3">Using Three.js to visualize mock Reddit comment data.</p>
+        <div id="visualization-container">
+            <!-- Three.js Canvas will render here -->
+        </div>
+        <div class="mt-4 p-2 bg-gray-100 rounded-lg text-sm text-gray-600">
+            <p><strong>Interpretation:</strong></p>
+            <ul class="list-disc list-inside">
+                <li>**Height:** Reflects comment reply depth (higher means deeper).</li>
+                <li>**Color:** Reflects hotness (redder means higher hotness).</li>
+                <li>**Width/Depth:** Reflects text length (wider means longer text).</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 3. Non-Traditional Signal Analysis -->
+    <div id="signal" class="tab-content p-2 bg-white rounded-lg shadow">
+        <h2 class="text-lg font-semibold mb-2 text-gray-700">Non-Traditional Signal Analysis</h2>
+        <p class="text-sm text-gray-500 mb-3">Enter data to calculate core quantitative metrics.</p>
+
+        <div class="mb-4">
+            <label for="signal-data" class="block text-sm font-medium text-gray-700 mb-1">
+                Enter Analysis Data (Format: Title, Community Professionalism Score, Votes, Comments, Price Drop %):
+            </label>
+            <textarea id="signal-data" rows="4" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Example: DOGE early Black Friday sale, 4, 12, 15, -15">DOGE early Black Friday sale, 4, 12, 15, -15
+Is DOGE still a factor?, 9, 6, 3, -5
+Me waiting for my $5,000 DOGE check, 3, 691, 9, -15</textarea>
+        </div>
+
+        <button id="calculate-signals-btn" class="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-150">
+            Calculate Investment Signals
+        </button>
+        
+        <div id="signal-results" class="mt-4 space-y-3">
+            <div id="result-cdi" class="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                <p class="text-sm font-semibold text-indigo-800">Community Dispersion Index (CDI): <span class="font-normal" id="cdi-value">Pending Calculation</span></p>
+                <p class="text-xs text-indigo-600" id="cdi-desc">Measures discussion spillover into non-core communities.</p>
+            </div>
+            <div id="result-sid" class="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <p class="text-sm font-semibold text-yellow-800">Sentiment Inversion Degree (SID): <span class="font-normal" id="sid-value">Pending Calculation</span></p>
+                <p class="text-xs text-yellow-600" id="sid-desc">Measures conflict between literal optimism and market pessimism (Dark Humor).</p>
+            </div>
+            <div id="result-final" class="p-3 bg-red-100 rounded-lg border border-red-300">
+                <p class="text-sm font-bold text-red-800">Final Investment Signal: <span class="font-normal" id="final-signal">Enter data and calculate.</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reference the external script -->
+    <script src="popup.js"></script>
+</body>
+</html>
