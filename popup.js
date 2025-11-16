@@ -1,6 +1,10 @@
 // --- Global Configuration and Utilities ---
-const apiKey = ""; // Left empty, Canvas environment will provide it
-const llmApiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+// API keys are now loaded from config.js (which is gitignored for security)
+// Make sure you've created config.js from config.example.js and added your API keys
+
+// Load API configuration from config.js
+const apiKey = GEMINI_CONFIG?.API_KEY || "";
+const llmApiUrl = GEMINI_CONFIG?.API_URL || "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
 
 function openTab(tabId) {
     // Toggle tab content visibility
@@ -323,6 +327,7 @@ window.onload = () => {
 /**
  * Attempts to pull the active tab's page text via the content script and fill the textarea.
  * Falls back silently if the page disallows scripts (e.g., Chrome Web Store/Extensions page).
+ * Now enhanced with Reddit API support for complete data fetching.
  */
 async function preloadActiveTabContent() {
     const statusEl = document.getElementById('summary-status');
@@ -342,7 +347,57 @@ async function preloadActiveTabContent() {
             return;
         }
 
-        // First try the injected content script path
+        const url = tab.url;
+
+        // Check if this is a Reddit URL and try API first
+        if (url && url.includes('reddit.com/r/') && url.includes('/comments/')) {
+            setStatus('Detected Reddit post. Fetching full data via API...', 'text-blue-600');
+
+            try {
+                const postData = await fetchRedditPost(url);
+
+                // Format the data comprehensively
+                let formattedContent = `Reddit Post Analysis (via API)\n`;
+                formattedContent += `================================\n\n`;
+                formattedContent += `Title: ${postData.title}\n`;
+                formattedContent += `Subreddit: r/${postData.subreddit}\n`;
+                formattedContent += `Author: u/${postData.author}\n`;
+                formattedContent += `Score: ${postData.score} upvotes (${Math.round(postData.upvote_ratio * 100)}% upvoted)\n`;
+                formattedContent += `Comments: ${postData.num_comments}\n`;
+                formattedContent += `Posted: ${new Date(postData.created_utc * 1000).toLocaleString()}\n`;
+                formattedContent += `URL: ${url}\n\n`;
+
+                if (postData.selftext) {
+                    formattedContent += `Post Content:\n${postData.selftext}\n\n`;
+                }
+
+                if (postData.comments && postData.comments.length > 0) {
+                    formattedContent += `Comments (${postData.comments.length} loaded):\n`;
+                    formattedContent += `================================\n`;
+                    postData.comments.slice(0, 20).forEach((comment, i) => {
+                        formattedContent += `\n[${i + 1}] u/${comment.author} (${comment.score} points, depth: ${comment.depth}):\n`;
+                        formattedContent += `${comment.body}\n`;
+
+                        // Include top replies
+                        if (comment.replies && comment.replies.length > 0) {
+                            comment.replies.slice(0, 3).forEach(reply => {
+                                formattedContent += `  └─ u/${reply.author} (${reply.score} points): ${reply.body.substring(0, 150)}...\n`;
+                            });
+                        }
+                    });
+                }
+
+                textarea.value = formattedContent;
+                setStatus(`✓ Loaded complete Reddit post via API (${postData.num_comments} comments, ${postData.comments.length} fetched)`, 'text-green-600');
+                return;
+
+            } catch (apiErr) {
+                console.error('Reddit API failed, falling back to scraping:', apiErr);
+                setStatus('API failed, trying web scraping...', 'text-yellow-600');
+            }
+        }
+
+        // Try the content script for enhanced web scraping
         let response;
         try {
             response = await chrome.tabs.sendMessage(tab.id, { action: 'scrapeContent' });
@@ -351,9 +406,14 @@ async function preloadActiveTabContent() {
         }
 
         if (response?.status === 'success' && response.data) {
-            const { title, content } = response.data;
-            textarea.value = `${title}\n\n${content}`;
-            setStatus('Loaded content from the active tab.', 'text-green-600');
+            const { content } = response.data;
+            textarea.value = content;
+
+            if (response.data.structured?.isRedditPost) {
+                setStatus(`✓ Scraped Reddit post from page (${response.data.structured.comments.length} comments visible)`, 'text-green-600');
+            } else {
+                setStatus('✓ Loaded content from the active tab.', 'text-green-600');
+            }
             return;
         }
 

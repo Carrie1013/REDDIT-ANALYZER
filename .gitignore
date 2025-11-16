@@ -1,0 +1,29 @@
+# API Keys and Secrets - NEVER commit these!
+config.js
+.env
+
+# Chrome extension temporary files
+*.pem
+*.crx
+
+# Node modules (if you add npm dependencies later)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Backup files
+*.bak
+*.tmp
