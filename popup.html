@@ -75,7 +75,23 @@ DOGE early Black Friday sale 👀. The community is still discussing whether DOG
     <!-- 2. 3D Structure Visualization -->
     <div id="3d" class="tab-content p-2 bg-white rounded-lg shadow">
         <h2 class="text-lg font-semibold mb-2 text-gray-700">3D Reddit Comment Tree Visualization</h2>
-        <p class="text-sm text-gray-500 mb-3">Interactive 3D visualization of Reddit comment threads with semantic analysis.</p>
+        <p class="text-sm text-gray-500 mb-2">Interactive 3D visualization of Reddit comment threads with semantic analysis.</p>
+
+        <!-- Classification Method Toggle -->
+        <div class="mb-2 flex items-center justify-between p-2 bg-blue-50 rounded border border-blue-200">
+            <div class="flex items-center gap-2">
+                <label class="text-xs font-medium text-gray-700">Classification:</label>
+                <select id="classification-method" class="text-xs border border-gray-300 rounded px-2 py-1 bg-white">
+                    <option value="regex">Regex (Fast, Free)</option>
+                    <option value="llm">LLM (Accurate, ~$0.01/thread)</option>
+                </select>
+            </div>
+            <div id="classification-stats" class="text-xs text-gray-600 hidden">
+                <span id="stats-solutions" class="text-emerald-600">●</span>
+                <span id="stats-questions" class="text-amber-600">●</span>
+                <span id="stats-debates" class="text-red-600">●</span>
+            </div>
+        </div>
 
         <div id="3d-status" class="text-xs text-gray-500 mb-2">No data loaded. Navigate to a Reddit post to visualize.</div>
 

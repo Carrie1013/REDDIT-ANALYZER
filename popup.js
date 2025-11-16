@@ -149,18 +149,28 @@ function init3D() {
  */
 async function load3DData() {
     const statusEl = document.getElementById('3d-status');
+    const methodSelect = document.getElementById('classification-method');
+    const useLLM = methodSelect?.value === 'llm';
 
     // Check if we have data from the Summary tab
     if (currentPostData && currentPostData.comments) {
-        statusEl.textContent = 'Building 3D visualization...';
+        const methodLabel = useLLM ? 'LLM classification' : 'regex classification';
+        statusEl.textContent = `Building 3D visualization with ${methodLabel}...`;
         statusEl.className = 'text-xs text-blue-600 mb-2';
 
         try {
             // Build comment tree
             const tree = buildCommentTree(currentPostData);
 
-            // Transform to 3D graph
-            const graphData = transformTreeTo3DGraph(tree);
+            // Transform to 3D graph (choose method based on user selection)
+            let graphData;
+            if (useLLM) {
+                statusEl.textContent = `Classifying comments with LLM (this may take a few seconds)...`;
+                graphData = await transformTreeTo3DGraphAsync(tree);
+            } else {
+                graphData = transformTreeTo3DGraph(tree);
+            }
+
             const { nodes, edges } = graphData;
 
             // Load into renderer
@@ -170,7 +180,13 @@ async function load3DData() {
             const metrics = calculateThreadMetrics(graphData, currentPostData);
             displayThreadMetrics(metrics);
 
-            statusEl.textContent = `✓ Visualization loaded: ${nodes.length} nodes, ${edges.length} connections`;
+            // Show classification statistics
+            displayClassificationStats(nodes);
+
+            const successMsg = useLLM
+                ? `✓ LLM classification complete: ${nodes.length} nodes, ${edges.length} connections`
+                : `✓ Visualization loaded: ${nodes.length} nodes, ${edges.length} connections`;
+            statusEl.textContent = successMsg;
             statusEl.className = 'text-xs text-green-600 mb-2';
         } catch (error) {
             console.error('3D visualization error:', error);
@@ -181,6 +197,28 @@ async function load3DData() {
         statusEl.textContent = 'No data loaded. Go to "Page Summary" tab and load a Reddit post first.';
         statusEl.className = 'text-xs text-gray-500 mb-2';
     }
+}
+
+/**
+ * Display classification statistics
+ */
+function displayClassificationStats(nodes) {
+    const statsEl = document.getElementById('classification-stats');
+    if (!statsEl) return;
+
+    const solutionCount = nodes.filter(n => n.isSolution).length;
+    const questionCount = nodes.filter(n => n.isQuestion).length;
+    const debateCount = nodes.filter(n => n.isDebate).length;
+    const total = nodes.length;
+
+    document.getElementById('stats-solutions').textContent =
+        `${solutionCount} (${((solutionCount/total)*100).toFixed(0)}%)`;
+    document.getElementById('stats-questions').textContent =
+        `${questionCount} (${((questionCount/total)*100).toFixed(0)}%)`;
+    document.getElementById('stats-debates').textContent =
+        `${debateCount} (${((debateCount/total)*100).toFixed(0)}%)`;
+
+    statsEl.classList.remove('hidden');
 }
 
 /**
@@ -337,6 +375,17 @@ function setupEventListeners() {
     // Action buttons
     document.getElementById('summarize-btn').addEventListener('click', summarizePage);
     document.getElementById('calculate-signals-btn').addEventListener('click', calculateSignals);
+
+    // Classification method change - re-render visualization
+    const methodSelect = document.getElementById('classification-method');
+    if (methodSelect) {
+        methodSelect.addEventListener('change', () => {
+            // Re-load 3D data with new classification method
+            if (currentPostData && currentPostData.comments) {
+                load3DData();
+            }
+        });
+    }
 }
 
 // Default to open the first Tab and setup listeners

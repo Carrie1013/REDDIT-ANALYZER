@@ -5,18 +5,136 @@
  */
 
 /**
- * Extract keywords from text for highlighting special nodes
+ * Configuration for classification method
+ * Set to 'regex' (fast, free) or 'llm' (accurate, <1¢/thread)
+ */
+const CLASSIFICATION_CONFIG = {
+  method: 'regex', // 'regex' or 'llm'
+  llmBatchSize: 20, // Classify 20 comments per API call
+  useCache: true // Cache LLM results
+};
+
+/**
+ * Extract keywords from text for highlighting special nodes (IMPROVED)
  * @param {string} text - Comment text
  * @returns {Object} Keywords found
  */
 function extractKeywords(text) {
   const lowerText = text.toLowerCase();
+  const trimmedText = text.trim();
+
+  // IMPROVED: More precise question detection
+  // Only match question patterns, not isolated question words
+  const isQuestion =
+    /\?[\s]*$/.test(trimmedText) || // Ends with question mark
+    /\b(how do|how to|how can|how should|why is|why does|why would|what should|what is the best|where can|where should|when should|which one|who can|can someone|does anyone|is there a way)\b/i.test(lowerText) ||
+    /^(how|why|what|where|when|which|who|can|does|is|are|should|could|would|will)\s/i.test(trimmedText); // Starts with question word
+
+  // IMPROVED: Expanded solution detection
+  // Match common solution patterns
+  const isSolution =
+    /\b(solved|fixed|resolved|solution|answer|here's how|here is how|this worked|worked for me|managed to|got it working|figured it out|turns out|try this|try using|use this|you can|you should|do this|install|run this|replace with|change to|i did|i used)\b/i.test(lowerText) ||
+    /^(try|use|install|run|change|replace|update|upgrade|download|set|add|remove)\s/i.test(trimmedText); // Command/instruction starters
+
+  // Debate detection (unchanged - works well)
+  const isDebate = /\b(but|however|disagree|wrong|actually|technically|not really|incorrect|no that's|that's not|you're wrong|i don't think)\b/i.test(lowerText);
 
   return {
-    isSolution: /\b(solve|solved|fix|fixed|replaced|solution|answer|resolved)\b/.test(lowerText),
-    isQuestion: /\b(how|why|what|when|where|who|\?)\b/.test(lowerText),
-    isDebate: /\b(but|however|disagree|wrong|actually|technically)\b/.test(lowerText)
+    isSolution,
+    isQuestion,
+    isDebate
   };
+}
+
+/**
+ * LLM-based classification using Gemini Flash (optional, more accurate)
+ * @param {Array} comments - Array of comment texts to classify
+ * @returns {Promise<Array>} Array of classification results
+ */
+async function classifyCommentsWithLLM(comments) {
+  if (!GEMINI_CONFIG?.API_KEY) {
+    console.warn('Gemini API key not configured, falling back to regex classification');
+    return comments.map(text => extractKeywords(text));
+  }
+
+  const apiKey = GEMINI_CONFIG.API_KEY;
+  const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
+
+  // Batch comments for efficiency
+  const batches = [];
+  for (let i = 0; i < comments.length; i += CLASSIFICATION_CONFIG.llmBatchSize) {
+    batches.push(comments.slice(i, i + CLASSIFICATION_CONFIG.llmBatchSize));
+  }
+
+  const allResults = [];
+
+  for (const batch of batches) {
+    const prompt = `Classify each of the following Reddit comments into ONE category: "solution", "question", "debate", or "neutral".
+
+A "solution" provides an answer, fix, workaround, or actionable advice.
+A "question" asks for help, information, or clarification (must be genuinely asking, not rhetorical).
+A "debate" expresses disagreement, correction, or counterargument.
+"neutral" is everything else (general discussion, agreement, thanks, etc.).
+
+Output ONLY a JSON array with the same number of elements as input comments, like: ["solution", "neutral", "question", "debate", ...]
+
+Comments:
+${batch.map((text, idx) => `${idx + 1}. ${text.substring(0, 200)}`).join('\n')}`;
+
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.1, // Low temperature for consistent classification
+        maxOutputTokens: 100
+      }
+    };
+
+    try {
+      const response = await fetch(apiUrl + `?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+
+      // Extract JSON array from response
+      const jsonMatch = text.match(/\[(.*?)\]/s);
+      if (jsonMatch) {
+        const classifications = JSON.parse('[' + jsonMatch[1] + ']');
+
+        // Convert to boolean flags
+        const batchResults = classifications.map(type => ({
+          isSolution: type === 'solution',
+          isQuestion: type === 'question',
+          isDebate: type === 'debate'
+        }));
+
+        allResults.push(...batchResults);
+      } else {
+        // Fallback to regex if parsing fails
+        console.warn('Failed to parse LLM response, using regex fallback');
+        allResults.push(...batch.map(text => extractKeywords(text)));
+      }
+
+      // Rate limiting: wait 250ms between batches (max 4 requests/second)
+      if (batches.indexOf(batch) < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+
+    } catch (error) {
+      console.error('LLM classification error:', error);
+      // Fallback to regex classification
+      allResults.push(...batch.map(text => extractKeywords(text)));
+    }
+  }
+
+  return allResults;
 }
 
 /**
@@ -81,7 +199,8 @@ function parseCommentsRecursive(comments, depth) {
 }
 
 /**
- * Transform tree structure into 3D graph nodes and edges
+ * Transform tree structure into 3D graph nodes and edges (SYNC VERSION)
+ * Uses regex-based classification (fast, free)
  * @param {Object} root - Root node of the thread tree
  * @returns {Object} Object containing nodes and edges arrays
  */
@@ -142,6 +261,89 @@ function transformTreeTo3DGraph(root) {
   collectNodes(root);
 
   // Second pass: compute visual properties based on max score
+  nodes.forEach(node => {
+    node.size = computeNodeSize(node.childrenCount);
+    node.color = computeNodeColor(node);
+    node.opacity = computeNodeOpacity(node.score, maxScore);
+  });
+
+  return { nodes, edges, maxScore };
+}
+
+/**
+ * Transform tree structure into 3D graph nodes and edges (ASYNC VERSION)
+ * Uses LLM-based classification (accurate, <1¢/thread)
+ * @param {Object} root - Root node of the thread tree
+ * @returns {Promise<Object>} Object containing nodes and edges arrays
+ */
+async function transformTreeTo3DGraphAsync(root) {
+  const nodes = [];
+  const edges = [];
+  let maxScore = 0;
+
+  // First pass: collect all nodes WITHOUT classification
+  function collectNodes(node, parent = null, xOffset = 0) {
+    maxScore = Math.max(maxScore, node.score);
+
+    const position = {
+      x: parent ? parent.position.x + xOffset : 0,
+      y: -node.depth * 0.8,
+      z: (Math.random() - 0.5) * 0.6
+    };
+
+    const graphNode = {
+      id: node.id,
+      depth: node.depth,
+      text: node.text,
+      author: node.author,
+      score: node.score,
+      timestamp: node.timestamp,
+      childrenCount: node.children.length,
+      position,
+      // Classifications will be added later
+      isSolution: false,
+      isQuestion: false,
+      isDebate: false
+    };
+
+    nodes.push(graphNode);
+
+    if (parent) {
+      edges.push({
+        source: parent.id,
+        target: node.id,
+        sourcePos: parent.position,
+        targetPos: position
+      });
+    }
+
+    if (node.children.length > 0) {
+      const spread = Math.min(node.children.length * 0.3, 2);
+      const startOffset = -spread / 2;
+
+      node.children.forEach((child, index) => {
+        const childOffset = startOffset + (spread / node.children.length) * index;
+        collectNodes(child, graphNode, childOffset);
+      });
+    }
+  }
+
+  collectNodes(root);
+
+  // Second pass: LLM classification in batches
+  const commentTexts = nodes.map(n => n.text);
+  const classifications = await classifyCommentsWithLLM(commentTexts);
+
+  // Apply classifications to nodes
+  nodes.forEach((node, idx) => {
+    if (classifications[idx]) {
+      node.isSolution = classifications[idx].isSolution;
+      node.isQuestion = classifications[idx].isQuestion;
+      node.isDebate = classifications[idx].isDebate;
+    }
+  });
+
+  // Third pass: compute visual properties
   nodes.forEach(node => {
     node.size = computeNodeSize(node.childrenCount);
     node.color = computeNodeColor(node);
