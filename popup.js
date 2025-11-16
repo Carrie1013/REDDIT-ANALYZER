@@ -31,6 +31,59 @@ function openTab(tabId) {
 // --- 1. LLM Page Summary ---
 
 /**
+ * Converts markdown text to HTML for proper display
+ */
+function markdownToHtml(text) {
+    if (!text) return '';
+
+    // Escape HTML to prevent XSS
+    let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    // Convert markdown formatting to HTML
+    html = html
+        // Headers (### Header, ## Header, # Header)
+        .replace(/^### (.*?)$/gm, '<h3 class="text-md font-semibold mt-3 mb-1 text-gray-800">$1</h3>')
+        .replace(/^## (.*?)$/gm, '<h2 class="text-lg font-semibold mt-4 mb-2 text-gray-800">$1</h2>')
+        .replace(/^# (.*?)$/gm, '<h1 class="text-xl font-bold mt-4 mb-2 text-gray-900">$1</h1>')
+
+        // Bold (**text** or __text__)
+        .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
+        .replace(/__(.+?)__/g, '<strong class="font-semibold text-gray-900">$1</strong>')
+
+        // Italic (*text* or _text_)
+        .replace(/\*(.+?)\*/g, '<em class="italic">$1</em>')
+        .replace(/_(.+?)_/g, '<em class="italic">$1</em>')
+
+        // Inline code (`code`)
+        .replace(/`(.+?)`/g, '<code class="bg-gray-200 px-1 rounded text-sm font-mono">$1</code>')
+
+        // Unordered lists (- item or * item)
+        .replace(/^[\*\-] (.+)$/gm, '<li class="ml-4">$1</li>')
+
+        // Ordered lists (1. item, 2. item, etc.)
+        .replace(/^\d+\. (.+)$/gm, '<li class="ml-4">$1</li>')
+
+        // Line breaks (two spaces at end of line or double newline)
+        .replace(/\n\n/g, '</p><p class="mb-2">')
+        .replace(/\n/g, '<br>');
+
+    // Wrap consecutive <li> in <ul> or <ol>
+    html = html.replace(/(<li class="ml-4">.*?<\/li>)(?:\s*<li class="ml-4">.*?<\/li>)*/g, (match) => {
+        return '<ul class="list-disc ml-6 mb-2">' + match + '</ul>';
+    });
+
+    // Wrap in paragraph if not already wrapped
+    if (!html.startsWith('<h1') && !html.startsWith('<h2') && !html.startsWith('<h3') && !html.startsWith('<ul')) {
+        html = '<p class="mb-2">' + html + '</p>';
+    }
+
+    return html;
+}
+
+/**
  * Automatically generates a summary of the Reddit post using LLM
  */
 async function autoGenerateSummary(postData) {
@@ -87,7 +140,9 @@ ${sampleComments.substring(0, 4000)}
 
             const result = await response.json();
             const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "LLM returned empty result.";
-            resultDiv.textContent = text;
+
+            // Convert markdown to HTML for proper display
+            resultDiv.innerHTML = markdownToHtml(text);
             break;
 
         } catch (error) {
