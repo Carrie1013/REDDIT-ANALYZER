@@ -31,20 +31,38 @@ function openTab(tabId) {
 // --- 1. LLM Page Summary ---
 
 /**
- * Calls Gemini API to generate a summary of the page content
+ * Automatically generates a summary of the Reddit post using LLM
  */
-async function summarizePage() {
-    const content = document.getElementById('page-content').value;
+async function autoGenerateSummary(postData) {
     const resultDiv = document.getElementById('summary-text');
-    const button = document.getElementById('summarize-btn');
+    const statusDiv = document.getElementById('summary-status');
 
-    if (!content) {
-        resultDiv.innerHTML = '<span class="text-red-500">Please enter text content for summarization.</span>';
+    if (!postData) {
+        resultDiv.innerHTML = '<span class="text-gray-500">No Reddit post loaded yet.</span>';
         return;
     }
 
-    resultDiv.innerHTML = '<span class="text-blue-500">Calling LLM for summary, please wait...</span>';
-    button.disabled = true;
+    // Update status to show data source
+    statusDiv.innerHTML = '<p class="text-xs text-green-600">✓ Fetched through Reddit API</p>';
+
+    resultDiv.innerHTML = '<span class="text-blue-500">Generating summary with LLM, please wait...</span>';
+
+    // Format Reddit content for summarization
+    const comments = collectAllComments(postData.comments || []);
+    const sampleComments = comments.slice(0, 30).map(c => `${c.author}: ${c.body}`).join('\n---\n');
+
+    const content = `
+Title: ${postData.title}
+Subreddit: r/${postData.subreddit}
+Score: ${postData.score} upvotes
+Comments: ${postData.num_comments}
+
+Post Content:
+${postData.selftext || '(No text content, may be a link post)'}
+
+Top Comments (${Math.min(30, comments.length)} of ${comments.length}):
+${sampleComments.substring(0, 4000)}
+    `.trim();
 
     const systemPrompt = "You are a senior financial market analyst. Based on the Reddit content provided by the user, briefly summarize the core discussion points, market sentiment (positive/negative/sarcastic), and potential information value in English. The summary should be concise.";
     const userQuery = `Summarize the following Reddit content:\n\n"${content}"`;
@@ -70,7 +88,7 @@ async function summarizePage() {
             const result = await response.json();
             const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "LLM returned empty result.";
             resultDiv.textContent = text;
-            break; 
+            break;
 
         } catch (error) {
             console.error("LLM API call failed:", error);
@@ -80,7 +98,6 @@ async function summarizePage() {
             await new Promise(resolve => setTimeout(resolve, 2000 * Math.pow(2, i))); // Exponential backoff
         }
     }
-    button.disabled = false;
 }
 
 // --- 2. 3D Structure Visualization ---
@@ -620,7 +637,6 @@ function setupEventListeners() {
     document.getElementById('tab-signal-btn').addEventListener('click', () => openTab('signal'));
 
     // Action buttons
-    document.getElementById('summarize-btn').addEventListener('click', summarizePage);
     document.getElementById('analyze-signals-btn').addEventListener('click', analyzeSignals);
 
     // Classification method change - re-render visualization
@@ -643,19 +659,16 @@ window.onload = () => {
 };
 
 /**
- * Attempts to pull the active tab's page text via the content script and fill the textarea.
- * Falls back silently if the page disallows scripts (e.g., Chrome Web Store/Extensions page).
- * Now enhanced with Reddit API support for complete data fetching.
+ * Automatically loads Reddit post data from the active tab.
+ * Uses Reddit API for complete data fetching when available.
+ * Automatically generates LLM summary when data is loaded.
  */
 async function preloadActiveTabContent() {
     const statusEl = document.getElementById('summary-status');
-    const textarea = document.getElementById('page-content');
-    if (!textarea) return;
 
     const setStatus = (msg, color = 'text-gray-500') => {
         if (!statusEl) return;
-        statusEl.className = `text-xs mb-2 ${color}`;
-        statusEl.textContent = msg;
+        statusEl.innerHTML = `<p class="text-xs ${color}">${msg}</p>`;
     };
 
     try {
@@ -674,42 +687,11 @@ async function preloadActiveTabContent() {
             try {
                 const postData = await fetchRedditPost(url);
 
-                // Format the data comprehensively
-                let formattedContent = `Reddit Post Analysis (via API)\n`;
-                formattedContent += `================================\n\n`;
-                formattedContent += `Title: ${postData.title}\n`;
-                formattedContent += `Subreddit: r/${postData.subreddit}\n`;
-                formattedContent += `Author: u/${postData.author}\n`;
-                formattedContent += `Score: ${postData.score} upvotes (${Math.round(postData.upvote_ratio * 100)}% upvoted)\n`;
-                formattedContent += `Comments: ${postData.num_comments}\n`;
-                formattedContent += `Posted: ${new Date(postData.created_utc * 1000).toLocaleString()}\n`;
-                formattedContent += `URL: ${url}\n\n`;
-
-                if (postData.selftext) {
-                    formattedContent += `Post Content:\n${postData.selftext}\n\n`;
-                }
-
-                if (postData.comments && postData.comments.length > 0) {
-                    formattedContent += `Comments (${postData.comments.length} loaded):\n`;
-                    formattedContent += `================================\n`;
-                    postData.comments.slice(0, 20).forEach((comment, i) => {
-                        formattedContent += `\n[${i + 1}] u/${comment.author} (${comment.score} points, depth: ${comment.depth}):\n`;
-                        formattedContent += `${comment.body}\n`;
-
-                        // Include top replies
-                        if (comment.replies && comment.replies.length > 0) {
-                            comment.replies.slice(0, 3).forEach(reply => {
-                                formattedContent += `  └─ u/${reply.author} (${reply.score} points): ${reply.body.substring(0, 150)}...\n`;
-                            });
-                        }
-                    });
-                }
-
-                textarea.value = formattedContent;
-                setStatus(`✓ Loaded complete Reddit post via API (${postData.num_comments} comments, ${postData.comments.length} fetched)`, 'text-green-600');
-
-                // Store post data globally for 3D visualization
+                // Store post data globally for 3D visualization and analysis
                 currentPostData = postData;
+
+                // Automatically generate summary with LLM
+                autoGenerateSummary(currentPostData);
 
                 return;
 
@@ -728,40 +710,19 @@ async function preloadActiveTabContent() {
         }
 
         if (response?.status === 'success' && response.data) {
-            const { content } = response.data;
-            textarea.value = content;
-
             if (response.data.structured?.isRedditPost) {
                 setStatus(`✓ Scraped Reddit post from page (${response.data.structured.comments.length} comments visible)`, 'text-green-600');
+                // Note: Scraped data may be incomplete. For best results, use Reddit API.
             } else {
-                setStatus('✓ Loaded content from the active tab.', 'text-green-600');
+                setStatus('This extension is designed for Reddit posts. Please navigate to a Reddit thread.', 'text-yellow-600');
             }
             return;
         }
 
-        // Fallback: directly execute a script to grab the page text
-        try {
-            const [result] = await chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                func: () => {
-                    const title = document.title || '';
-                    const bodyText = (document.body?.innerText || '').slice(0, 1500);
-                    return { title, content: bodyText };
-                },
-            });
-            if (result?.result) {
-                const { title, content } = result.result;
-                textarea.value = `${title}\n\n${content}`;
-                setStatus('Loaded via scripting API.', 'text-green-600');
-                return;
-            }
-        } catch (scriptErr) {
-            console.warn('Direct scripting read failed:', scriptErr);
-        }
-
-        setStatus('No content returned. You can paste manually.', 'text-gray-500');
+        // If we get here, this is likely not a Reddit post
+        setStatus('No Reddit post detected. Please navigate to a Reddit thread to use this analyzer.', 'text-gray-500');
     } catch (err) {
         console.error('Failed to load tab content:', err);
-        setStatus('The page content cannot be read automatically. Please paste it manually.', 'text-red-500');
+        setStatus('Error loading page. Please navigate to a Reddit thread (reddit.com/r/.../comments/...).', 'text-red-500');
     }
 }

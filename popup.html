@@ -53,22 +53,13 @@
     <!-- 1. Page Summary (LLM) -->
     <div id="summary" class="tab-content active-tab p-2 bg-white rounded-lg shadow">
         <h2 class="text-lg font-semibold mb-2 text-gray-700">LLM Page Content Summary</h2>
-        <div class="mb-4">
-            <label for="page-content" class="block text-sm font-medium text-gray-700 mb-1">
-                Mock Page Text (e.g., Reddit Post Content):
-            </label>
-            <p id="summary-status" class="text-xs text-gray-500 mb-2">Trying to load the active tab content automatically...</p>
-            <textarea id="page-content" rows="5" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Paste the content of the current Reddit post or search results...">
-DOGE early Black Friday sale 👀. The community is still discussing whether DOGE is still a factor, given the recent -15% drop. Most comments are short and use lots of emojis. We need to check the long-term relevance.
-            </textarea>
-        </div>
-        
-        <button id="summarize-btn" class="w-full py-2 px-4 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition duration-150">
-            Generate Summary
-        </button>
 
-        <div id="summary-result" class="mt-4 p-3 bg-gray-100 rounded-lg border border-gray-200">
-            <p class="text-sm text-gray-600" id="summary-text">Summary results will appear here.</p>
+        <div id="summary-status" class="mb-3 p-2 bg-blue-50 rounded border border-blue-200">
+            <p class="text-xs text-gray-600">Loading Reddit post data...</p>
+        </div>
+
+        <div id="summary-result" class="mt-2 p-3 bg-gray-100 rounded-lg border border-gray-200">
+            <p class="text-sm text-gray-600" id="summary-text">Summary will appear here after loading a Reddit post.</p>
         </div>
     </div>
 
