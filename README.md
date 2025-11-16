@@ -7,7 +7,7 @@ A Chrome extension that analyzes Reddit posts using both web scraping and the Re
 - **Reddit API Integration**: Fetches complete post data with all comments using OAuth authentication
 - **Enhanced Web Scraping**: Falls back to intelligent DOM scraping when API is unavailable
 - **LLM Analysis**: Uses Google's Gemini AI for content summarization and sentiment analysis
-- **3D Visualization**: Three.js-based visualization of comment structure
+- **3D Visualization**: Interactive 3D comment tree visualization with semantic analysis (adapted from reddit-3d-app)
 - **Signal Analysis**: Calculates Community Dispersion Index (CDI) and Sentiment Inversion Degree (SID)
 
 ## Setup Instructions

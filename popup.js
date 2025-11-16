@@ -119,112 +119,99 @@ async function summarizePage() {
 
 // --- 2. 3D Structure Visualization ---
 
-let scene, camera, renderer, container;
-const data = [
-    // Mock Reddit comment data (Level, Hotness, Length)
-    { level: 1, hotness: 0.8, length: 15, x: -10, z: -10 },
-    { level: 2, hotness: 0.5, length: 30, x: -5, z: -5 },
-    { level: 3, hotness: 0.2, length: 60, x: 0, z: 0 },
-    { level: 1, hotness: 0.9, length: 5, x: 10, z: 10 },
-    { level: 2, hotness: 0.7, length: 25, x: 5, z: 5 },
-    { level: 3, hotness: 0.6, length: 45, x: 15, z: 15 },
-    { level: 4, hotness: 0.1, length: 100, x: 20, z: 20 },
-];
+let reddit3DRenderer = null;
+let currentPostData = null;
 
 /**
- * Initializes the 3D scene
+ * Initialize 3D visualization
  */
 function init3D() {
-    // Clean up old canvas elements
-    container = document.getElementById('visualization-container');
+    const container = document.getElementById('visualization-container');
     if (!container) return;
-    while (container.firstChild) {
-        container.removeChild(container.firstChild);
+
+    // Clean up existing renderer
+    if (reddit3DRenderer) {
+        reddit3DRenderer.destroy();
     }
 
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1f2937); // Dark gray background
+    // Create new renderer
+    reddit3DRenderer = new Reddit3DRenderer(container);
 
-    camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    container.appendChild(renderer.domElement);
+    // Listen for node selection events
+    window.addEventListener('nodeSelected', handleNodeSelection);
 
-    // Ensure adaptation on window resize (simulating responsiveness)
-    window.addEventListener('resize', onWindowResize, false);
-    function onWindowResize() {
-        if(container.offsetParent === null) return; // Don't process if container is not visible
-        camera.aspect = container.clientWidth / container.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
-    }
-    
-    // Add lighting
-    const light = new THREE.DirectionalLight(0xffffff, 3);
-    light.position.set(1, 1, 1);
-    scene.add(light);
-    scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-
-    // Add ground grid
-    const gridHelper = new THREE.GridHelper(50, 50, 0x4a5568, 0x2d3748);
-    scene.add(gridHelper);
-
-    // Create visualization
-    createDataVisualization();
-
-    camera.position.set(20, 30, 40);
-    camera.lookAt(0, 0, 0);
-
-    animate();
+    // Try to load data from current tab if available
+    load3DData();
 }
 
 /**
- * Creates 3D objects based on mock data
+ * Load Reddit data and create 3D visualization
  */
-function createDataVisualization() {
-    // Remove previous objects
-    scene.children.filter(obj => obj.isMesh).forEach(obj => scene.remove(obj));
+async function load3DData() {
+    const statusEl = document.getElementById('3d-status');
 
-    const maxLevel = Math.max(...data.map(d => d.level));
-    const maxLength = Math.max(...data.map(d => d.length));
-    const barWidth = 2;
+    // Check if we have data from the Summary tab
+    if (currentPostData && currentPostData.comments) {
+        statusEl.textContent = 'Building 3D visualization...';
+        statusEl.className = 'text-xs text-blue-600 mb-2';
 
-    data.forEach(item => {
-        // Height (Level): Reflects comment depth
-        const height = (item.level / maxLevel) * 15 + 1; // Scaled height
+        try {
+            // Build comment tree
+            const tree = buildCommentTree(currentPostData);
 
-        // Color (Hotness): From blue (low hotness) to red (high hotness)
-        const color = new THREE.Color(0x0000ff);
-        color.lerp(new THREE.Color(0xff0000), item.hotness);
+            // Transform to 3D graph
+            const { nodes, edges } = transformTreeTo3DGraph(tree);
 
-        // Width/Depth (Length): Reflects text length
-        const widthDepth = (item.length / maxLength) * barWidth + 0.5;
+            // Load into renderer
+            reddit3DRenderer.loadGraph(nodes, edges);
 
-        const geometry = new THREE.BoxGeometry(widthDepth, height, widthDepth);
-        const material = new THREE.MeshPhongMaterial({ color: color });
-        const cube = new THREE.Mesh(geometry, material);
-
-        // Position: Horizontal distribution
-        cube.position.x = item.x;
-        cube.position.y = height / 2; // Position cube base on the ground
-        cube.position.z = item.z;
-
-        scene.add(cube);
-    });
+            statusEl.textContent = `✓ Visualization loaded: ${nodes.length} nodes, ${edges.length} connections`;
+            statusEl.className = 'text-xs text-green-600 mb-2';
+        } catch (error) {
+            console.error('3D visualization error:', error);
+            statusEl.textContent = '✗ Error creating visualization: ' + error.message;
+            statusEl.className = 'text-xs text-red-600 mb-2';
+        }
+    } else {
+        statusEl.textContent = 'No data loaded. Go to "Page Summary" tab and load a Reddit post first.';
+        statusEl.className = 'text-xs text-gray-500 mb-2';
+    }
 }
 
 /**
- * 3D animation loop
+ * Handle node selection from 3D renderer
  */
-function animate() {
-    // Run animation only when container is visible
-    if (container && container.offsetParent !== null) {
-        requestAnimationFrame(animate);
-        
-        // Simple rotation effect
-        scene.rotation.y += 0.005;
+function handleNodeSelection(event) {
+    const node = event.detail;
+    if (!node) return;
 
-        renderer.render(scene, camera);
+    // Show node info panel
+    const panel = document.getElementById('node-info-panel');
+    panel.classList.remove('hidden');
+
+    // Update panel content
+    document.getElementById('node-type-badge').textContent = getNodeTypeLabel(node);
+    document.getElementById('node-author').textContent = 'u/' + node.author;
+    document.getElementById('node-score').textContent = formatScore(node.score);
+    document.getElementById('node-depth').textContent = node.depth;
+    document.getElementById('node-replies').textContent = node.childrenCount;
+    document.getElementById('node-time').textContent = formatTimestamp(node.timestamp);
+    document.getElementById('node-text').textContent = node.text;
+
+    // Update badge color based on type
+    const badge = document.getElementById('node-type-badge');
+    badge.className = 'px-2 py-1 text-xs rounded';
+
+    if (node.isSolution) {
+        badge.classList.add('bg-green-100', 'text-green-800');
+    } else if (node.isQuestion) {
+        badge.classList.add('bg-yellow-100', 'text-yellow-800');
+    } else if (node.isDebate) {
+        badge.classList.add('bg-orange-100', 'text-orange-800');
+    } else if (node.depth >= 5) {
+        badge.classList.add('bg-blue-100', 'text-blue-800');
+    } else {
+        badge.classList.add('bg-gray-100', 'text-gray-800');
     }
 }
 
@@ -389,6 +376,10 @@ async function preloadActiveTabContent() {
 
                 textarea.value = formattedContent;
                 setStatus(`✓ Loaded complete Reddit post via API (${postData.num_comments} comments, ${postData.comments.length} fetched)`, 'text-green-600');
+
+                // Store post data globally for 3D visualization
+                currentPostData = postData;
+
                 return;
 
             } catch (apiErr) {
