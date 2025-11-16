@@ -83,6 +83,17 @@ DOGE early Black Friday sale 👀. The community is still discussing whether DOG
             <!-- Three.js Canvas will render here -->
         </div>
 
+        <!-- Thread Metrics Panel -->
+        <div id="metrics-panel" class="mt-3 p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200 hidden">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-sm font-bold text-gray-800">📊 Thread Analytics</h3>
+                <button id="toggle-metrics-btn" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Hide</button>
+            </div>
+            <div id="metrics-content" class="max-h-64 overflow-y-auto">
+                <!-- Metrics will be populated here -->
+            </div>
+        </div>
+
         <!-- Selected Node Info Panel -->
         <div id="node-info-panel" class="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hidden">
             <div class="flex justify-between items-start mb-2">
@@ -100,17 +111,71 @@ DOGE early Black Friday sale 👀. The community is still discussing whether DOG
             </div>
         </div>
 
-        <div class="mt-4 p-2 bg-gray-100 rounded-lg text-sm text-gray-600">
-            <p><strong>Legend:</strong></p>
-            <ul class="list-disc list-inside text-xs space-y-1">
-                <li><span class="inline-block w-3 h-3 rounded-full" style="background-color: #059669;"></span> <strong>Emerald:</strong> Solution/Answer nodes</li>
-                <li><span class="inline-block w-3 h-3 rounded-full" style="background-color: #d97706;"></span> <strong>Amber:</strong> Question nodes</li>
-                <li><span class="inline-block w-3 h-3 rounded-full" style="background-color: #dc2626;"></span> <strong>Red:</strong> Debate/Discussion nodes</li>
-                <li><span class="inline-block w-3 h-3 rounded-full" style="background-color: #7c3aed;"></span> <strong>Violet:</strong> Deep threads (5+ levels)</li>
-                <li><span class="inline-block w-3 h-3 rounded-full" style="background-color: #2563eb;"></span> → <span class="inline-block w-3 h-3 rounded-full" style="background-color: #a855f7;"></span> <strong>Blue to Purple gradient:</strong> Comment depth (0-4 levels)</li>
-                <li><strong>Size:</strong> Larger = more replies | <strong>Opacity:</strong> Higher = more upvotes | <strong>Pulsing:</strong> Branch points (3+)</li>
-                <li><strong>Controls:</strong> Left-drag: Rotate • Right-drag: Pan • Scroll: Zoom • Click: Select & center node</li>
-            </ul>
+        <!-- Enhanced Structured Legend -->
+        <div class="mt-4 p-3 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200 text-xs">
+            <h3 class="text-sm font-bold text-gray-800 mb-2 border-b border-gray-300 pb-1">📊 Visualization Legend</h3>
+
+            <!-- Semantic Classification -->
+            <div class="mb-3">
+                <p class="font-semibold text-gray-700 mb-1.5">🎯 Semantic Classification (Priority)</p>
+                <div class="space-y-1 pl-2">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-block w-3 h-3 rounded-full shadow-sm" style="background-color: #059669;"></span>
+                        <span class="text-gray-700"><strong class="text-emerald-700">Solution</strong> — Answers, fixes, resolutions</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="inline-block w-3 h-3 rounded-full shadow-sm" style="background-color: #d97706;"></span>
+                        <span class="text-gray-700"><strong class="text-amber-700">Question</strong> — Inquiries, requests for info</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="inline-block w-3 h-3 rounded-full shadow-sm" style="background-color: #dc2626;"></span>
+                        <span class="text-gray-700"><strong class="text-red-700">Debate</strong> — Disagreements, corrections</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="inline-block w-3 h-3 rounded-full shadow-sm" style="background-color: #7c3aed;"></span>
+                        <span class="text-gray-700"><strong class="text-violet-700">Deep Thread</strong> — 5+ levels deep</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Depth Gradient -->
+            <div class="mb-3">
+                <p class="font-semibold text-gray-700 mb-1.5">📏 Depth Gradient (Default)</p>
+                <div class="flex items-center gap-1 pl-2">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full shadow-sm" style="background-color: #2563eb;" title="Depth 0: Root post"></span>
+                    <span class="text-gray-400">→</span>
+                    <span class="inline-block w-2.5 h-2.5 rounded-full shadow-sm" style="background-color: #3b82f6;" title="Depth 1"></span>
+                    <span class="text-gray-400">→</span>
+                    <span class="inline-block w-2.5 h-2.5 rounded-full shadow-sm" style="background-color: #6366f1;" title="Depth 2"></span>
+                    <span class="text-gray-400">→</span>
+                    <span class="inline-block w-2.5 h-2.5 rounded-full shadow-sm" style="background-color: #8b5cf6;" title="Depth 3"></span>
+                    <span class="text-gray-400">→</span>
+                    <span class="inline-block w-2.5 h-2.5 rounded-full shadow-sm" style="background-color: #a855f7;" title="Depth 4+"></span>
+                    <span class="text-gray-600 ml-1">Blue→Purple (0-4+)</span>
+                </div>
+            </div>
+
+            <!-- Visual Properties -->
+            <div class="mb-3">
+                <p class="font-semibold text-gray-700 mb-1.5">👁️ Visual Encoding</p>
+                <div class="grid grid-cols-2 gap-x-3 gap-y-1 pl-2 text-gray-700">
+                    <div><strong>Size:</strong> More replies</div>
+                    <div><strong>Opacity:</strong> Higher score</div>
+                    <div><strong>Pulsing:</strong> Branch (3+ replies)</div>
+                    <div><strong>Glow:</strong> Selected node</div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div>
+                <p class="font-semibold text-gray-700 mb-1.5">🎮 Controls</p>
+                <div class="pl-2 text-gray-600 space-y-0.5">
+                    <div><strong>Left-drag:</strong> Rotate camera</div>
+                    <div><strong>Right-drag:</strong> Pan view</div>
+                    <div><strong>Scroll:</strong> Zoom in/out</div>
+                    <div><strong>Click:</strong> Select & center node</div>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -160,10 +160,15 @@ async function load3DData() {
             const tree = buildCommentTree(currentPostData);
 
             // Transform to 3D graph
-            const { nodes, edges } = transformTreeTo3DGraph(tree);
+            const graphData = transformTreeTo3DGraph(tree);
+            const { nodes, edges } = graphData;
 
             // Load into renderer
             reddit3DRenderer.loadGraph(nodes, edges);
+
+            // Calculate and display metrics
+            const metrics = calculateThreadMetrics(graphData, currentPostData);
+            displayThreadMetrics(metrics);
 
             statusEl.textContent = `✓ Visualization loaded: ${nodes.length} nodes, ${edges.length} connections`;
             statusEl.className = 'text-xs text-green-600 mb-2';
@@ -175,6 +180,36 @@ async function load3DData() {
     } else {
         statusEl.textContent = 'No data loaded. Go to "Page Summary" tab and load a Reddit post first.';
         statusEl.className = 'text-xs text-gray-500 mb-2';
+    }
+}
+
+/**
+ * Display thread metrics in the metrics panel
+ */
+function displayThreadMetrics(metrics) {
+    const metricsPanel = document.getElementById('metrics-panel');
+    const metricsContent = document.getElementById('metrics-content');
+
+    if (!metricsPanel || !metricsContent) return;
+
+    // Show the metrics panel
+    metricsPanel.classList.remove('hidden');
+
+    // Format and display metrics
+    metricsContent.innerHTML = formatMetricsForDisplay(metrics);
+
+    // Setup toggle button
+    const toggleBtn = document.getElementById('toggle-metrics-btn');
+    if (toggleBtn) {
+        toggleBtn.onclick = () => {
+            if (metricsContent.style.display === 'none') {
+                metricsContent.style.display = 'block';
+                toggleBtn.textContent = 'Hide';
+            } else {
+                metricsContent.style.display = 'none';
+                toggleBtn.textContent = 'Show';
+            }
+        };
     }
 }
 

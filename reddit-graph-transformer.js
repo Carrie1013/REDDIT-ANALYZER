@@ -287,3 +287,319 @@ function formatTimestamp(timestamp) {
     day: 'numeric'
   });
 }
+
+// ============================================================================
+// ADVANCED METRICS CALCULATION MODULE
+// ============================================================================
+
+/**
+ * Calculate comprehensive thread structure metrics
+ * @param {Object} graphData - Graph data with nodes and edges
+ * @param {Object} postData - Original post data with metadata
+ * @returns {Object} Comprehensive metrics object
+ */
+function calculateThreadMetrics(graphData, postData) {
+  const { nodes, edges } = graphData;
+
+  if (!nodes || nodes.length === 0) {
+    return getEmptyMetrics();
+  }
+
+  return {
+    structure: calculateStructureMetrics(nodes, edges),
+    content: calculateContentMetrics(nodes),
+    temporal: calculateTemporalMetrics(nodes, postData),
+    social: calculateSocialMetrics(nodes, postData),
+    engagement: calculateEngagementMetrics(nodes, postData)
+  };
+}
+
+/**
+ * Calculate thread structure metrics
+ */
+function calculateStructureMetrics(nodes, edges) {
+  const depths = nodes.map(n => n.depth);
+  const maxDepth = Math.max(...depths);
+
+  // Calculate breadth at each level
+  const breadthByLevel = {};
+  nodes.forEach(n => {
+    breadthByLevel[n.depth] = (breadthByLevel[n.depth] || 0) + 1;
+  });
+  const maxBreadth = Math.max(...Object.values(breadthByLevel));
+
+  // Branch points (nodes with 3+ children)
+  const branchPoints = nodes.filter(n => n.childrenCount >= 3).length;
+
+  // Thread Divergence Score: horizontal spread vs vertical depth
+  const divergenceScore = maxDepth > 0 ? (maxBreadth / maxDepth) * Math.log(branchPoints + 1) : 0;
+
+  // Longest path (maximum depth)
+  const longestPath = maxDepth;
+
+  // Graph density
+  const possibleEdges = nodes.length > 1 ? (nodes.length * (nodes.length - 1)) / 2 : 1;
+  const density = edges.length / possibleEdges;
+
+  // Subtree weight variance
+  const childrenCounts = nodes.map(n => n.childrenCount);
+  const avgChildren = childrenCounts.reduce((a, b) => a + b, 0) / childrenCounts.length;
+  const variance = childrenCounts.reduce((sum, c) => sum + Math.pow(c - avgChildren, 2), 0) / childrenCounts.length;
+  const subtreeBalance = Math.sqrt(variance);
+
+  return {
+    totalNodes: nodes.length,
+    totalEdges: edges.length,
+    maxDepth,
+    maxBreadth,
+    branchPoints,
+    divergenceScore: divergenceScore.toFixed(2),
+    longestPath,
+    density: density.toFixed(4),
+    subtreeBalance: subtreeBalance.toFixed(2),
+    breadthByLevel
+  };
+}
+
+/**
+ * Calculate content and sentiment metrics
+ */
+function calculateContentMetrics(nodes) {
+  let solutionNodes = 0;
+  let questionNodes = 0;
+  let debateNodes = 0;
+  let deepThreadNodes = 0;
+
+  nodes.forEach(n => {
+    if (n.isSolution) solutionNodes++;
+    if (n.isQuestion) questionNodes++;
+    if (n.isDebate) debateNodes++;
+    if (n.depth >= 5) deepThreadNodes++;
+  });
+
+  const totalNodes = nodes.length;
+
+  // Conversation Balance Index: constructive vs argumentative
+  const constructive = solutionNodes + questionNodes;
+  const argumentative = debateNodes + (totalNodes - constructive - deepThreadNodes);
+  const balanceIndex = argumentative > 0 ? (constructive / argumentative) : constructive;
+
+  // Solution Density: solutions per 100 comments
+  const solutionDensity = (solutionNodes / totalNodes) * 100;
+
+  // Controversy Score: debate prevalence weighted by score variance
+  const scores = nodes.map(n => n.score);
+  const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+  const scoreVariance = scores.reduce((sum, s) => sum + Math.pow(s - avgScore, 2), 0) / scores.length;
+  const controversyScore = (debateNodes / totalNodes) * Math.sqrt(scoreVariance);
+
+  return {
+    solutionNodes,
+    questionNodes,
+    debateNodes,
+    deepThreadNodes,
+    neutralNodes: totalNodes - solutionNodes - questionNodes - debateNodes,
+    balanceIndex: balanceIndex.toFixed(2),
+    solutionDensity: solutionDensity.toFixed(1),
+    controversyScore: controversyScore.toFixed(2),
+    distribution: {
+      solutions: ((solutionNodes / totalNodes) * 100).toFixed(1) + '%',
+      questions: ((questionNodes / totalNodes) * 100).toFixed(1) + '%',
+      debates: ((debateNodes / totalNodes) * 100).toFixed(1) + '%'
+    }
+  };
+}
+
+/**
+ * Calculate temporal metrics
+ */
+function calculateTemporalMetrics(nodes, postData) {
+  if (!postData || !postData.created_utc) {
+    return {
+      activityVelocity: 0,
+      lifecycleStage: 'Unknown',
+      avgResponseTime: 0,
+      peakActivityPeriod: 'N/A'
+    };
+  }
+
+  const now = Date.now() / 1000;
+  const postAge = now - postData.created_utc;
+  const postAgeHours = postAge / 3600;
+
+  // Activity Velocity: comments per hour
+  const activityVelocity = postAgeHours > 0 ? (nodes.length / postAgeHours) : 0;
+
+  // Lifecycle Stage
+  let lifecycleStage;
+  if (postAgeHours < 2) lifecycleStage = 'Early';
+  else if (postAgeHours < 24) lifecycleStage = 'Active';
+  else if (postAgeHours < 168) lifecycleStage = 'Mature'; // 7 days
+  else lifecycleStage = 'Archive';
+
+  // Response time distribution (simplified: average time between consecutive nodes)
+  const timestamps = nodes.map(n => n.timestamp).filter(t => t > 0).sort();
+  let totalGap = 0;
+  let gapCount = 0;
+  for (let i = 1; i < timestamps.length; i++) {
+    totalGap += timestamps[i] - timestamps[i - 1];
+    gapCount++;
+  }
+  const avgResponseTime = gapCount > 0 ? (totalGap / gapCount) / 60 : 0; // in minutes
+
+  return {
+    activityVelocity: activityVelocity.toFixed(2),
+    lifecycleStage,
+    avgResponseTime: avgResponseTime.toFixed(1) + ' min',
+    postAgeHours: postAgeHours.toFixed(1)
+  };
+}
+
+/**
+ * Calculate social network metrics
+ */
+function calculateSocialMetrics(nodes, postData) {
+  const authors = new Set(nodes.map(n => n.author).filter(a => a && a !== 'unknown'));
+  const totalComments = nodes.length;
+
+  // Author Diversity
+  const authorDiversity = totalComments > 0 ? (authors.size / totalComments) : 0;
+
+  // OP Engagement Ratio
+  const opAuthor = postData?.author || '';
+  const opComments = opAuthor ? nodes.filter(n => n.author === opAuthor).length : 0;
+  const opEngagement = totalComments > 0 ? (opComments / totalComments) : 0;
+
+  // Expert Concentration (top 10% authors' comment share)
+  const authorCounts = {};
+  nodes.forEach(n => {
+    if (n.author && n.author !== 'unknown') {
+      authorCounts[n.author] = (authorCounts[n.author] || 0) + 1;
+    }
+  });
+
+  const sortedAuthors = Object.entries(authorCounts).sort((a, b) => b[1] - a[1]);
+  const top10Percent = Math.max(1, Math.ceil(sortedAuthors.length * 0.1));
+  const topAuthorComments = sortedAuthors.slice(0, top10Percent).reduce((sum, [_, count]) => sum + count, 0);
+  const expertConcentration = totalComments > 0 ? (topAuthorComments / totalComments) : 0;
+
+  return {
+    uniqueAuthors: authors.size,
+    authorDiversity: authorDiversity.toFixed(2),
+    opEngagement: (opEngagement * 100).toFixed(1) + '%',
+    expertConcentration: (expertConcentration * 100).toFixed(1) + '%',
+    topContributors: sortedAuthors.slice(0, 5).map(([author, count]) => ({
+      author,
+      comments: count,
+      percentage: ((count / totalComments) * 100).toFixed(1) + '%'
+    }))
+  };
+}
+
+/**
+ * Calculate engagement metrics
+ */
+function calculateEngagementMetrics(nodes, postData) {
+  const scores = nodes.map(n => n.score);
+  const totalScore = scores.reduce((a, b) => a + b, 0);
+  const avgScore = scores.length > 0 ? (totalScore / scores.length) : 0;
+  const maxScore = Math.max(...scores);
+  const minScore = Math.min(...scores);
+
+  // Thread Health Score: combines avg score, reply rate, depth distribution
+  const avgChildren = nodes.reduce((sum, n) => sum + n.childrenCount, 0) / nodes.length;
+  const deepThreadCount = nodes.filter(n => n.depth >= 5).length;
+  const healthScore = avgChildren > 0 ? (avgScore * avgChildren) / (1 + deepThreadCount) : avgScore;
+
+  return {
+    avgScore: avgScore.toFixed(1),
+    maxScore,
+    minScore,
+    totalScore,
+    avgReplies: avgChildren.toFixed(1),
+    healthScore: healthScore.toFixed(2)
+  };
+}
+
+/**
+ * Get empty metrics object
+ */
+function getEmptyMetrics() {
+  return {
+    structure: {},
+    content: {},
+    temporal: {},
+    social: {},
+    engagement: {}
+  };
+}
+
+/**
+ * Format metrics for display
+ * @param {Object} metrics - Metrics object
+ * @returns {string} Formatted HTML string
+ */
+function formatMetricsForDisplay(metrics) {
+  if (!metrics || !metrics.structure) {
+    return '<p class="text-gray-500">No metrics available</p>';
+  }
+
+  let html = '<div class="space-y-3 text-xs">';
+
+  // Structure Metrics
+  html += '<div class="border-b pb-2">';
+  html += '<h4 class="font-semibold text-gray-800 mb-1">📐 Structure</h4>';
+  html += `<div class="grid grid-cols-2 gap-1 text-gray-600">`;
+  html += `<div>Nodes: ${metrics.structure.totalNodes}</div>`;
+  html += `<div>Max Depth: ${metrics.structure.maxDepth}</div>`;
+  html += `<div>Breadth: ${metrics.structure.maxBreadth}</div>`;
+  html += `<div>Branches: ${metrics.structure.branchPoints}</div>`;
+  html += `<div>Divergence: ${metrics.structure.divergenceScore}</div>`;
+  html += `<div>Balance: ${metrics.structure.subtreeBalance}</div>`;
+  html += `</div></div>`;
+
+  // Content Metrics
+  html += '<div class="border-b pb-2">';
+  html += '<h4 class="font-semibold text-gray-800 mb-1">💬 Content</h4>';
+  html += `<div class="grid grid-cols-2 gap-1 text-gray-600">`;
+  html += `<div>Solutions: ${metrics.content.solutionNodes}</div>`;
+  html += `<div>Questions: ${metrics.content.questionNodes}</div>`;
+  html += `<div>Debates: ${metrics.content.debateNodes}</div>`;
+  html += `<div>Balance: ${metrics.content.balanceIndex}</div>`;
+  html += `<div>Sol. Density: ${metrics.content.solutionDensity}%</div>`;
+  html += `<div>Controversy: ${metrics.content.controversyScore}</div>`;
+  html += `</div></div>`;
+
+  // Temporal Metrics
+  html += '<div class="border-b pb-2">';
+  html += '<h4 class="font-semibold text-gray-800 mb-1">⏱️ Temporal</h4>';
+  html += `<div class="grid grid-cols-2 gap-1 text-gray-600">`;
+  html += `<div>Stage: ${metrics.temporal.lifecycleStage}</div>`;
+  html += `<div>Age: ${metrics.temporal.postAgeHours}h</div>`;
+  html += `<div>Velocity: ${metrics.temporal.activityVelocity}/h</div>`;
+  html += `<div>Avg Response: ${metrics.temporal.avgResponseTime}</div>`;
+  html += `</div></div>`;
+
+  // Social Metrics
+  html += '<div class="border-b pb-2">';
+  html += '<h4 class="font-semibold text-gray-800 mb-1">👥 Social</h4>';
+  html += `<div class="grid grid-cols-2 gap-1 text-gray-600">`;
+  html += `<div>Authors: ${metrics.social.uniqueAuthors}</div>`;
+  html += `<div>Diversity: ${metrics.social.authorDiversity}</div>`;
+  html += `<div>OP Engage: ${metrics.social.opEngagement}</div>`;
+  html += `<div>Expert Con: ${metrics.social.expertConcentration}</div>`;
+  html += `</div></div>`;
+
+  // Engagement Metrics
+  html += '<div>';
+  html += '<h4 class="font-semibold text-gray-800 mb-1">🎯 Engagement</h4>';
+  html += `<div class="grid grid-cols-2 gap-1 text-gray-600">`;
+  html += `<div>Avg Score: ${metrics.engagement.avgScore}</div>`;
+  html += `<div>Max Score: ${metrics.engagement.maxScore}</div>`;
+  html += `<div>Avg Replies: ${metrics.engagement.avgReplies}</div>`;
+  html += `<div>Health: ${metrics.engagement.healthScore}</div>`;
+  html += `</div></div>`;
+
+  html += '</div>';
+  return html;
+}
