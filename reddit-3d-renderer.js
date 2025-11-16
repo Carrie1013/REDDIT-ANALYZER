@@ -44,17 +44,18 @@ class Reddit3DRenderer {
     this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
     this.container.appendChild(this.renderer.domElement);
 
-    // Add lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    // Add soft, even lighting for clean look on bright background
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     this.scene.add(ambientLight);
 
-    const pointLight1 = new THREE.PointLight(0xffffff, 1);
-    pointLight1.position.set(10, 10, 10);
-    this.scene.add(pointLight1);
+    // Directional lights for subtle definition without harsh shadows
+    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.4);
+    directionalLight1.position.set(5, 10, 5);
+    this.scene.add(directionalLight1);
 
-    const pointLight2 = new THREE.PointLight(0xffffff, 0.5);
-    pointLight2.position.set(-10, -10, -10);
-    this.scene.add(pointLight2);
+    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
+    directionalLight2.position.set(-5, 5, -5);
+    this.scene.add(directionalLight2);
 
     // Add grid helper with colors suitable for bright background
     const gridHelper = new THREE.GridHelper(50, 50, 0xbfdbfe, 0xdbeafe);
@@ -68,56 +69,139 @@ class Reddit3DRenderer {
   }
 
   /**
-   * Setup mouse interaction (orbit controls simulation)
+   * Setup mouse interaction with orbit and pan controls
    */
   setupMouseInteraction() {
     let mouseDown = false;
+    let rightMouseDown = false;
     let mouseX = 0;
     let mouseY = 0;
-    let rotationX = 0;
-    let rotationY = 0;
+    let isDragging = false;
+
+    // Camera control state
+    this.cameraTarget = new THREE.Vector3(0, 0, 0);
+    this.cameraDistance = 8;
+    this.cameraTheta = Math.PI / 4;
+    this.cameraPhi = Math.PI / 3;
 
     this.renderer.domElement.addEventListener('mousedown', (e) => {
-      mouseDown = true;
+      if (e.button === 0) { // Left button
+        mouseDown = true;
+      } else if (e.button === 2) { // Right button
+        rightMouseDown = true;
+      }
       mouseX = e.clientX;
       mouseY = e.clientY;
+      isDragging = false;
     });
 
-    this.renderer.domElement.addEventListener('mouseup', () => {
-      mouseDown = false;
+    this.renderer.domElement.addEventListener('mouseup', (e) => {
+      if (e.button === 0) {
+        mouseDown = false;
+        // Only trigger click if not dragging
+        if (!isDragging) {
+          this.onNodeClick(e);
+        }
+      } else if (e.button === 2) {
+        rightMouseDown = false;
+      }
     });
 
     this.renderer.domElement.addEventListener('mousemove', (e) => {
-      if (!mouseDown) return;
+      if (!mouseDown && !rightMouseDown) return;
 
       const deltaX = e.clientX - mouseX;
       const deltaY = e.clientY - mouseY;
 
+      if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+        isDragging = true;
+      }
+
       mouseX = e.clientX;
       mouseY = e.clientY;
 
-      rotationY += deltaX * 0.005;
-      rotationX += deltaY * 0.005;
+      if (mouseDown) {
+        // Left mouse: Rotate camera
+        this.cameraTheta -= deltaX * 0.01;
+        this.cameraPhi -= deltaY * 0.01;
 
-      // Rotate camera around scene
-      const radius = 5;
-      this.camera.position.x = radius * Math.sin(rotationY) * Math.cos(rotationX);
-      this.camera.position.y = radius * Math.sin(rotationX) + 2;
-      this.camera.position.z = radius * Math.cos(rotationY) * Math.cos(rotationX);
-      this.camera.lookAt(0, 0, 0);
+        // Clamp phi to prevent flipping
+        this.cameraPhi = Math.max(0.1, Math.min(Math.PI - 0.1, this.cameraPhi));
+
+        this.updateCameraPosition();
+      } else if (rightMouseDown) {
+        // Right mouse: Pan camera
+        const panSpeed = 0.01;
+        const right = new THREE.Vector3();
+        const up = new THREE.Vector3(0, 1, 0);
+
+        // Calculate right vector
+        right.crossVectors(up, this.camera.position.clone().sub(this.cameraTarget).normalize());
+        right.normalize();
+
+        // Pan the target
+        this.cameraTarget.add(right.multiplyScalar(-deltaX * panSpeed));
+        this.cameraTarget.y += deltaY * panSpeed;
+
+        this.updateCameraPosition();
+      }
+    });
+
+    // Prevent context menu on right click
+    this.renderer.domElement.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
     });
 
     // Mouse wheel for zoom
     this.renderer.domElement.addEventListener('wheel', (e) => {
       e.preventDefault();
       const delta = e.deltaY * 0.001;
-      this.camera.position.multiplyScalar(1 + delta);
+      this.cameraDistance *= (1 + delta);
+      this.cameraDistance = Math.max(2, Math.min(20, this.cameraDistance));
+      this.updateCameraPosition();
     });
+  }
 
-    // Click to select node
-    this.renderer.domElement.addEventListener('click', (e) => {
-      this.onNodeClick(e);
-    });
+  /**
+   * Update camera position based on spherical coordinates
+   */
+  updateCameraPosition() {
+    const x = this.cameraDistance * Math.sin(this.cameraPhi) * Math.cos(this.cameraTheta);
+    const y = this.cameraDistance * Math.cos(this.cameraPhi);
+    const z = this.cameraDistance * Math.sin(this.cameraPhi) * Math.sin(this.cameraTheta);
+
+    this.camera.position.set(
+      this.cameraTarget.x + x,
+      this.cameraTarget.y + y,
+      this.cameraTarget.z + z
+    );
+    this.camera.lookAt(this.cameraTarget);
+  }
+
+  /**
+   * Smoothly move camera to center on a target position
+   */
+  centerOnPosition(position, duration = 1000) {
+    const startTarget = this.cameraTarget.clone();
+    const endTarget = new THREE.Vector3(position.x, position.y, position.z);
+    const startTime = Date.now();
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const t = Math.min(elapsed / duration, 1);
+
+      // Ease out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+
+      this.cameraTarget.lerpVectors(startTarget, endTarget, eased);
+      this.updateCameraPosition();
+
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    animate();
   }
 
   /**
@@ -148,6 +232,9 @@ class Reddit3DRenderer {
    */
   selectNode(node) {
     this.selectedNode = node;
+
+    // Center camera on selected node with smooth animation
+    this.centerOnPosition(node.position, 800);
 
     // Update all node materials
     this.nodeMeshes.forEach(mesh => {
@@ -210,13 +297,14 @@ class Reddit3DRenderer {
    */
   createNodes() {
     this.nodes.forEach(node => {
-      const geometry = new THREE.SphereGeometry(1, 16, 16);
-      const material = new THREE.MeshStandardMaterial({
+      const geometry = new THREE.SphereGeometry(1, 32, 32); // More segments for smoother look
+      const material = new THREE.MeshPhongMaterial({
         color: node.color,
         transparent: true,
         opacity: node.opacity,
-        roughness: 0.3,
-        metalness: 0.7
+        shininess: 60,
+        specular: 0xffffff,
+        flatShading: false
       });
 
       const mesh = new THREE.Mesh(geometry, material);
