@@ -28,7 +28,7 @@ class Reddit3DRenderer {
   init() {
     // Create scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x1f2937); // Dark gray background
+    this.scene.background = new THREE.Color(0xf0f4f8); // Bright light blue-gray background
 
     // Create camera
     this.camera = new THREE.PerspectiveCamera(
@@ -56,8 +56,8 @@ class Reddit3DRenderer {
     pointLight2.position.set(-10, -10, -10);
     this.scene.add(pointLight2);
 
-    // Add grid helper
-    const gridHelper = new THREE.GridHelper(50, 50, 0x4a5568, 0x2d3748);
+    // Add grid helper with colors suitable for bright background
+    const gridHelper = new THREE.GridHelper(50, 50, 0xbfdbfe, 0xdbeafe);
     this.scene.add(gridHelper);
 
     // Handle window resize
@@ -194,9 +194,9 @@ class Reddit3DRenderer {
 
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
       const material = new THREE.LineBasicMaterial({
-        color: 0xffffff,
+        color: 0x94a3b8, // Slate gray for better visibility on bright background
         transparent: true,
-        opacity: 0.2
+        opacity: 0.4
       });
 
       const line = new THREE.Line(geometry, material);
@@ -259,8 +259,7 @@ class Reddit3DRenderer {
       }
     });
 
-    // Slowly rotate the entire scene
-    this.scene.rotation.y += 0.001;
+    // Auto-spin removed - user can manually rotate with mouse
 
     this.renderer.render(this.scene, this.camera);
   }

@@ -162,37 +162,42 @@ function computeNodeSize(childrenCount) {
 
 /**
  * Compute node color based on properties
+ * Vibrant color palette optimized for bright background
  * @param {Object} node - Graph node
  * @returns {string} Color hex code
  */
 function computeNodeColor(node) {
-  // Solution nodes are green
+  // Solution nodes - Rich emerald green
   if (node.isSolution) {
-    return '#4ade80';
+    return '#059669';
   }
 
-  // Question nodes are yellow
+  // Question nodes - Bold amber/orange
   if (node.isQuestion) {
-    return '#fbbf24';
+    return '#d97706';
   }
 
-  // Debate nodes are orange
+  // Debate nodes - Vibrant red-orange
   if (node.isDebate) {
-    return '#fb923c';
+    return '#dc2626';
   }
 
-  // Deep nodes (depth >= 5) are blue
+  // Deep nodes (depth >= 5) - Deep violet
   if (node.depth >= 5) {
-    return '#60a5fa';
+    return '#7c3aed';
   }
 
-  // Default color based on depth
-  if (node.depth < 2) {
-    return '#6bbaff';
-  } else if (node.depth < 5) {
-    return '#a4e86f';
+  // Default color gradient based on depth (vibrant blues to purples)
+  if (node.depth === 0) {
+    return '#2563eb'; // Bold blue for root post
+  } else if (node.depth === 1) {
+    return '#3b82f6'; // Bright blue for top-level comments
+  } else if (node.depth === 2) {
+    return '#6366f1'; // Indigo for second level
+  } else if (node.depth === 3) {
+    return '#8b5cf6'; // Purple for third level
   } else {
-    return '#ffda8e';
+    return '#a855f7'; // Bright purple for 4th level
   }
 }
 
