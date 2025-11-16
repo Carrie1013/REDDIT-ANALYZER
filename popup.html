@@ -198,33 +198,122 @@ DOGE early Black Friday sale 👀. The community is still discussing whether DOG
     <!-- 3. Non-Traditional Signal Analysis -->
     <div id="signal" class="tab-content p-2 bg-white rounded-lg shadow">
         <h2 class="text-lg font-semibold mb-2 text-gray-700">Non-Traditional Signal Analysis</h2>
-        <p class="text-sm text-gray-500 mb-3">Enter data to calculate core quantitative metrics.</p>
+        <p class="text-sm text-gray-500 mb-2">Automated behavioral and sentiment analysis for investment signals.</p>
 
-        <div class="mb-4">
-            <label for="signal-data" class="block text-sm font-medium text-gray-700 mb-1">
-                Enter Analysis Data (Format: Title, Community Professionalism Score, Votes, Comments, Price Drop %):
-            </label>
-            <textarea id="signal-data" rows="4" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Example: DOGE early Black Friday sale, 4, 12, 15, -15">DOGE early Black Friday sale, 4, 12, 15, -15
-Is DOGE still a factor?, 9, 6, 3, -5
-Me waiting for my $5,000 DOGE check, 3, 691, 9, -15</textarea>
-        </div>
+        <div id="signal-status" class="text-xs text-gray-500 mb-3">Load a Reddit post to begin analysis.</div>
 
-        <button id="calculate-signals-btn" class="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-150">
-            Calculate Investment Signals
+        <button id="analyze-signals-btn" class="w-full py-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-lg shadow-md hover:from-blue-700 hover:to-indigo-700 transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed">
+            🔍 Analyze Thread Signals
         </button>
-        
-        <div id="signal-results" class="mt-4 space-y-3">
-            <div id="result-cdi" class="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
-                <p class="text-sm font-semibold text-indigo-800">Community Dispersion Index (CDI): <span class="font-normal" id="cdi-value">Pending Calculation</span></p>
-                <p class="text-xs text-indigo-600" id="cdi-desc">Measures discussion spillover into non-core communities.</p>
+
+        <div id="signal-results" class="mt-4 space-y-3 hidden">
+
+            <!-- Confidence Score (Top Display) -->
+            <div id="confidence-panel" class="p-4 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border-2 border-purple-300">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-sm font-bold text-purple-900">📊 Confidence Score</h3>
+                    <span id="confidence-score" class="text-2xl font-bold text-purple-600">--</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                    <div id="confidence-bar" class="bg-gradient-to-r from-purple-600 to-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+                <p id="confidence-desc" class="text-xs text-purple-700">Calculating...</p>
             </div>
-            <div id="result-sid" class="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                <p class="text-sm font-semibold text-yellow-800">Sentiment Inversion Degree (SID): <span class="font-normal" id="sid-value">Pending Calculation</span></p>
-                <p class="text-xs text-yellow-600" id="sid-desc">Measures conflict between literal optimism and market pessimism (Dark Humor).</p>
+
+            <!-- Behavior Rhythm Metrics -->
+            <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <h3 class="text-sm font-bold text-blue-900 mb-2">📈 Behavior Rhythm Metrics</h3>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-white p-2 rounded border border-blue-100">
+                        <div class="text-gray-500">Avg Comment Length</div>
+                        <div class="font-semibold text-blue-700" id="metric-comment-length">--</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-blue-100">
+                        <div class="text-gray-500">Punctuation Chaos</div>
+                        <div class="font-semibold text-blue-700" id="metric-punctuation">--</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-blue-100">
+                        <div class="text-gray-500">Emoji Density</div>
+                        <div class="font-semibold text-blue-700" id="metric-emoji">--</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-blue-100">
+                        <div class="text-gray-500">Comments/Score Ratio</div>
+                        <div class="font-semibold text-blue-700" id="metric-comment-score">--</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-blue-100">
+                        <div class="text-gray-500">Media Ratio</div>
+                        <div class="font-semibold text-blue-700" id="metric-media">--</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-blue-100">
+                        <div class="text-gray-500">Caps Intensity</div>
+                        <div class="font-semibold text-blue-700" id="metric-caps">--</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-blue-100">
+                        <div class="text-gray-500">Edit Frequency</div>
+                        <div class="font-semibold text-blue-700" id="metric-edits">--</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-blue-100">
+                        <div class="text-gray-500">Deleted Ratio</div>
+                        <div class="font-semibold text-blue-700" id="metric-deleted">--</div>
+                    </div>
+                </div>
             </div>
-            <div id="result-final" class="p-3 bg-red-100 rounded-lg border border-red-300">
-                <p class="text-sm font-bold text-red-800">Final Investment Signal: <span class="font-normal" id="final-signal">Enter data and calculate.</span></p>
+
+            <!-- Core Metrics (LLM-Generated) -->
+            <div class="p-3 bg-green-50 rounded-lg border border-green-200">
+                <h3 class="text-sm font-bold text-green-900 mb-2">🧠 Core Sentiment Metrics (LLM)</h3>
+                <div class="space-y-2 text-xs">
+                    <div class="bg-white p-2 rounded border border-green-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Technical Density</span>
+                            <span class="font-semibold text-green-700" id="metric-technical">--</span>
+                        </div>
+                        <div class="text-gray-500 text-xs mt-1" id="metric-technical-desc">Academic terms / total words</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-green-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Contextual Depth</span>
+                            <span class="font-semibold text-green-700" id="metric-context">--</span>
+                        </div>
+                        <div class="text-gray-500 text-xs mt-1" id="metric-context-desc">Analysis quality level</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-green-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Evidence Volume</span>
+                            <span class="font-semibold text-green-700" id="metric-evidence">--</span>
+                        </div>
+                        <div class="text-gray-500 text-xs mt-1" id="metric-evidence-desc">Data/sources cited</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-green-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Meme/Frivolity Index</span>
+                            <span class="font-semibold text-green-700" id="metric-mfi">--</span>
+                        </div>
+                        <div class="text-gray-500 text-xs mt-1" id="metric-mfi-desc">Seriousness vs humor ratio</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-green-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">False Optimism Signal</span>
+                            <span class="font-semibold text-green-700" id="metric-optimism">--</span>
+                        </div>
+                        <div class="text-gray-500 text-xs mt-1" id="metric-optimism-desc">Artificial positivity detection</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-green-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Capitulation Signal</span>
+                            <span class="font-semibold text-green-700" id="metric-capitulation">--</span>
+                        </div>
+                        <div class="text-gray-500 text-xs mt-1" id="metric-capitulation-desc">Despair/surrender level</div>
+                    </div>
+                </div>
             </div>
+
+            <!-- Investment Signal Summary -->
+            <div id="investment-signal" class="p-3 rounded-lg border-2">
+                <h3 class="text-sm font-bold mb-2">💰 Investment Signal</h3>
+                <p id="signal-recommendation" class="text-sm"></p>
+            </div>
+
         </div>
     </div>
 

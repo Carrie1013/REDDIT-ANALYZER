@@ -28,40 +28,6 @@ function openTab(tabId) {
     }
 }
 
-/**
- * Simulates base index calculation
- * @param {string} title Post title
- * @param {number} pScore Community Professionalism Score (1-10)
- * @param {number} votes Votes count
- * @param {number} comments Comments count
- * @param {number} priceDrop Price drop (%) (negative value)
- */
-function calculateMetricSet(title, pScore, votes, comments, priceDrop) {
-    // 1. Confidence Erosion Index (CEI) - Simplified: uses specific keywords
-    const doubtKeywords = ['factor', 'still', 'dead', 'relevance', 'fade'];
-    let titleWordCount = title.split(/\s+/).length;
-    let doubtCount = doubtKeywords.filter(keyword => title.toLowerCase().includes(keyword)).length;
-    const CEI = (doubtCount / titleWordCount) * (pScore / 10); // Combines with professionalism
-
-    // 2. Sentiment Inversion Degree (SID) - Dark Humor
-    // Assuming the literal optimism of terms like "Black Friday Sale" is 0.8
-    let S_literal = 0.0;
-    if (title.toLowerCase().includes('sale') || title.toLowerCase().includes('black friday')) {
-        S_literal = 0.8; 
-    } else if (title.toLowerCase().includes('waiting')) {
-        S_literal = 0.1; // Slightly positive, but more of a complaint
-    }
-
-    // Market background pessimism B_market: Price drop percentage / 20 (normalized)
-    const B_market = Math.max(-1, priceDrop / 20); 
-    const SID = Math.abs(S_literal - B_market); // Absolute difference
-
-    // 3. Interaction Efficiency (Comment/Vote Ratio)
-    const CVR = votes > 0 ? comments / votes : comments;
-
-    return { CEI, SID, CVR };
-}
-
 // --- 1. LLM Page Summary ---
 
 /**
@@ -291,76 +257,352 @@ function handleNodeSelection(event) {
 // --- 3. Non-Traditional Signal Analysis ---
 
 /**
- * Calculates and displays non-traditional investment signals
+ * Calculate behavior rhythm metrics from Reddit thread data
  */
-function calculateSignals() {
-    const dataInput = document.getElementById('signal-data').value;
-    const lines = dataInput.trim().split('\n');
+function calculateBehaviorRhythm(postData) {
+    const comments = collectAllComments(postData.comments || []);
+    const totalComments = comments.length;
 
-    let totalCDI = 0;
-    let totalSID = 0;
-    let count = 0;
-
-    // Mock data for Community Dispersion Index (CDI)
-    const subreddits = [
-        { name: 'r/dogecoin', isCore: true, professional: 4 },
-        { name: 'r/Accenture_AFS', isCore: false, professional: 9 },
-        { name: 'r/WallStreetBetsCrypto', isCore: false, professional: 7 },
-        { name: 'r/DJT_Uncensored', isCore: false, professional: 3 },
-        { name: 'r/BlueskySkeets', isCore: false, professional: 3 },
-    ];
-    // P_score in mock data is used as a proxy for subreddits[i].professional
-    const allPscores = lines.map(line => parseFloat(line.split(',')[1].trim()));
-    const uniquePscores = [...new Set(allPscores)].filter(p => p > 0);
-    
-    // 1. Community Dispersion Index (CDI) - Based on unique Professionalism Scores
-    const P_core = lines.filter(line => parseFloat(line.split(',')[1].trim()) <= 4).length / lines.length;
-    const CDI = uniquePscores.length * (1 - P_core);
-    
-    document.getElementById('cdi-value').textContent = CDI.toFixed(2);
-    if (CDI > 2.5) {
-        document.getElementById('cdi-desc').textContent = "High Dispersion: Discussion spills over into multiple professional communities. Signal of rising mainstream attention.";
-        document.getElementById('result-cdi').classList.add('bg-green-100', 'border-green-300');
-    } else {
-        document.getElementById('cdi-desc').textContent = "Low Dispersion: Discussion is concentrated in core communities, low signal spillover.";
-        document.getElementById('result-cdi').classList.remove('bg-green-100', 'border-green-300');
+    if (totalComments === 0) {
+        return {
+            avgCommentLength: 0,
+            punctuationChaos: 0,
+            emojiDensity: 0,
+            commentScoreRatio: 0,
+            mediaRatio: 0,
+            capsIntensity: 0,
+            editFrequency: 0,
+            deletedRatio: 0
+        };
     }
 
-    // 2. Sentiment Inversion Degree (SID)
-    lines.forEach(line => {
-        const parts = line.split(',').map(p => p.trim());
-        if (parts.length === 5) {
-            const [title, pScoreStr, votesStr, commentsStr, priceDropStr] = parts;
-            const pScore = parseFloat(pScoreStr);
-            const votes = parseInt(votesStr);
-            const comments = parseInt(commentsStr);
-            const priceDrop = parseFloat(priceDropStr);
+    // 1. Average Comment Length
+    const totalLength = comments.reduce((sum, c) => sum + (c.body?.length || 0), 0);
+    const avgCommentLength = totalLength / totalComments;
 
-            const metrics = calculateMetricSet(title, pScore, votes, comments, priceDrop);
-            totalSID += metrics.SID;
-            count++;
-        }
+    // 2. Punctuation Chaos (variance in punctuation usage)
+    const punctuationCounts = comments.map(c => {
+        const text = c.body || '';
+        return (text.match(/[!?.,;:]/g) || []).length / Math.max(text.length, 1);
     });
+    const avgPunct = punctuationCounts.reduce((a, b) => a + b, 0) / punctuationCounts.length;
+    const variance = punctuationCounts.reduce((sum, p) => sum + Math.pow(p - avgPunct, 2), 0) / punctuationCounts.length;
+    const punctuationChaos = Math.sqrt(variance);
 
-    const avgSID = count > 0 ? totalSID / count : 0;
-    document.getElementById('sid-value').textContent = avgSID.toFixed(2);
+    // 3. Emoji Density
+    const emojiCount = comments.reduce((sum, c) => {
+        const text = c.body || '';
+        // Count common emoji patterns
+        const emojis = text.match(/[\u{1F600}-\u{1F64F}|\u{1F300}-\u{1F5FF}|\u{1F680}-\u{1F6FF}|\u{2600}-\u{26FF}|\u{2700}-\u{27BF}|😀-🙏|🌀-🗿|🚀-🛿|☀-⛿|✀-➿]/gu) || [];
+        return sum + emojis.length;
+    }, 0);
+    const totalWords = comments.reduce((sum, c) => sum + (c.body?.split(/\s+/).length || 0), 0);
+    const emojiDensity = (emojiCount / Math.max(totalWords, 1)) * 100;
 
-    let finalSignal = "";
-    if (avgSID > 1.2 && CDI < 2.5) {
-        finalSignal = "Strong Capitulation Sarcasm Signal: Market is extremely pessimistic, but discussion is concentrated among retail, possibly indicating a short-term bottom.";
-        document.getElementById('result-final').classList.add('bg-red-100', 'border-red-300');
-        document.getElementById('result-sid').classList.add('bg-red-100', 'border-red-300');
-    } else if (CDI > 2.5 && avgSID < 0.5) {
-        finalSignal = "Mainstream Attention Shift Signal: Professional communities are involved, lacking dark humor, potentially indicating a narrative shift towards fundamentals.";
-        document.getElementById('result-final').classList.add('bg-green-100', 'border-green-300');
-        document.getElementById('result-sid').classList.remove('bg-red-100', 'border-red-300');
-    } else {
-        finalSignal = "Neutral/High Volatility Warning: Ambiguous signal metrics, dispersed market view, recommended observation.";
-        document.getElementById('result-final').classList.remove('bg-red-100', 'border-red-300', 'bg-green-100', 'border-green-300');
-        document.getElementById('result-sid').classList.remove('bg-red-100', 'border-red-300');
+    // 4. Comments/Score Ratio
+    const totalScore = postData.score || 0;
+    const commentScoreRatio = totalScore > 0 ? totalComments / totalScore : totalComments;
+
+    // 5. Image/Video Ratio (estimate from URLs)
+    const mediaCount = comments.reduce((sum, c) => {
+        const text = c.body || '';
+        const hasMedia = /\.(jpg|jpeg|png|gif|webp|mp4|webm|youtube\.com|youtu\.be|imgur\.com|gfycat\.com)/i.test(text);
+        return sum + (hasMedia ? 1 : 0);
+    }, 0);
+    const mediaRatio = (mediaCount / totalComments) * 100;
+
+    // 6. Capitalization Intensity
+    const capsCount = comments.reduce((sum, c) => {
+        const text = c.body || '';
+        const upperChars = (text.match(/[A-Z]/g) || []).length;
+        const letters = (text.match(/[A-Za-z]/g) || []).length;
+        return sum + (letters > 0 ? upperChars / letters : 0);
+    }, 0);
+    const capsIntensity = (capsCount / totalComments) * 100;
+
+    // 7. Edit Frequency (estimate from "edited" field if available)
+    const editedCount = comments.filter(c => c.edited || (c.body && c.body.includes('*edit'))).length;
+    const editFrequency = (editedCount / totalComments) * 100;
+
+    // 8. Deleted Comment Ratio (detect [deleted] or [removed])
+    const deletedCount = comments.filter(c => {
+        const text = c.body || '';
+        return text === '[deleted]' || text === '[removed]' || c.author === '[deleted]';
+    }).length;
+    const deletedRatio = (deletedCount / totalComments) * 100;
+
+    return {
+        avgCommentLength: avgCommentLength.toFixed(1),
+        punctuationChaos: punctuationChaos.toFixed(3),
+        emojiDensity: emojiDensity.toFixed(2) + '%',
+        commentScoreRatio: commentScoreRatio.toFixed(2),
+        mediaRatio: mediaRatio.toFixed(1) + '%',
+        capsIntensity: capsIntensity.toFixed(1) + '%',
+        editFrequency: editFrequency.toFixed(1) + '%',
+        deletedRatio: deletedRatio.toFixed(1) + '%'
+    };
+}
+
+/**
+ * Helper: Collect all comments recursively
+ */
+function collectAllComments(comments) {
+    const result = [];
+    for (const comment of comments) {
+        result.push(comment);
+        if (comment.replies && Array.isArray(comment.replies)) {
+            result.push(...collectAllComments(comment.replies));
+        }
+    }
+    return result;
+}
+
+/**
+ * Calculate core sentiment metrics using LLM
+ */
+async function calculateCoreMetrics(postData) {
+    if (!GEMINI_CONFIG?.API_KEY) {
+        return {
+            technicalDensity: 'N/A',
+            contextualDepth: 'N/A',
+            evidenceVolume: 'N/A',
+            mfi: 'N/A',
+            falseOptimism: 'N/A',
+            capitulation: 'N/A'
+        };
     }
 
-    document.getElementById('final-signal').textContent = finalSignal;
+    const comments = collectAllComments(postData.comments || []);
+    const sampleSize = Math.min(50, comments.length);
+    const sampleComments = comments.slice(0, sampleSize).map(c => c.body).join('\n---\n');
+
+    const prompt = `Analyze the following Reddit discussion and provide quantitative metrics (0-10 scale or percentage):
+
+DISCUSSION TITLE: ${postData.title}
+SUBREDDIT: r/${postData.subreddit}
+
+SAMPLE COMMENTS (${sampleSize} of ${comments.length}):
+${sampleComments.substring(0, 3000)}
+
+Provide ONLY a JSON object with these exact keys and numeric values:
+{
+  "technicalDensity": <0-10 score for academic/technical terms density>,
+  "contextualDepth": <0-10 score for analysis quality and depth>,
+  "evidenceVolume": <0-10 score for data/sources/evidence cited>,
+  "mfi": <0-10 score where 0=serious, 10=pure memes/jokes>,
+  "falseOptimism": <0-10 score for artificial/forced positivity>,
+  "capitulation": <0-10 score for despair/surrender sentiment>
+}
+
+Consider:
+- Technical density: Financial jargon, technical analysis terms, academic language
+- Contextual depth: Nuanced analysis vs surface-level reactions
+- Evidence: Links, data points, charts, research citations
+- MFI: Memes, emojis, jokes, sarcasm vs serious discussion
+- False optimism: "Hopium", forced positivity, denial
+- Capitulation: "It's over", surrender, despair, selling pressure
+
+Output ONLY the JSON, no explanation.`;
+
+    try {
+        const response = await fetch(llmApiUrl + `?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.2,
+                    maxOutputTokens: 200
+                }
+            })
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const result = await response.json();
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+
+        // Extract JSON from response
+        const jsonMatch = text.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+            const metrics = JSON.parse(jsonMatch[0]);
+            return {
+                technicalDensity: metrics.technicalDensity?.toFixed(1) || 'N/A',
+                contextualDepth: metrics.contextualDepth?.toFixed(1) || 'N/A',
+                evidenceVolume: metrics.evidenceVolume?.toFixed(1) || 'N/A',
+                mfi: metrics.mfi?.toFixed(1) || 'N/A',
+                falseOptimism: metrics.falseOptimism?.toFixed(1) || 'N/A',
+                capitulation: metrics.capitulation?.toFixed(1) || 'N/A'
+            };
+        }
+    } catch (error) {
+        console.error('Core metrics LLM error:', error);
+    }
+
+    return {
+        technicalDensity: 'Error',
+        contextualDepth: 'Error',
+        evidenceVolume: 'Error',
+        mfi: 'Error',
+        falseOptimism: 'Error',
+        capitulation: 'Error'
+    };
+}
+
+/**
+ * Calculate overall confidence score
+ */
+function calculateConfidenceScore(behaviorMetrics, coreMetrics) {
+    // Parse numeric values
+    const parseMetric = (val) => {
+        if (typeof val === 'string') {
+            return parseFloat(val.replace('%', '')) || 0;
+        }
+        return parseFloat(val) || 0;
+    };
+
+    // Behavior scoring (0-50 points)
+    let behaviorScore = 0;
+
+    // Low emoji = more serious (+10)
+    const emojiVal = parseMetric(behaviorMetrics.emojiDensity);
+    behaviorScore += Math.max(0, 10 - emojiVal);
+
+    // Moderate comment length is good (+10)
+    const lengthVal = parseMetric(behaviorMetrics.avgCommentLength);
+    behaviorScore += lengthVal > 100 && lengthVal < 500 ? 10 : 5;
+
+    // Low caps = more serious (+10)
+    const capsVal = parseMetric(behaviorMetrics.capsIntensity);
+    behaviorScore += Math.max(0, 10 - capsVal / 2);
+
+    // Higher punctuation chaos = more emotional (-5 to +10)
+    const punctVal = parseMetric(behaviorMetrics.punctuationChaos);
+    behaviorScore += punctVal < 0.05 ? 10 : 5;
+
+    // Low deleted/edit = authentic (+10)
+    const deletedVal = parseMetric(behaviorMetrics.deletedRatio);
+    behaviorScore += Math.max(0, 10 - deletedVal);
+
+    // Core metrics scoring (0-50 points)
+    let coreScore = 0;
+
+    const technical = parseMetric(coreMetrics.technicalDensity);
+    const depth = parseMetric(coreMetrics.contextualDepth);
+    const evidence = parseMetric(coreMetrics.evidenceVolume);
+    const mfi = parseMetric(coreMetrics.mfi);
+
+    // High technical + depth + evidence = good
+    coreScore += (technical * 2); // 0-20
+    coreScore += (depth * 1.5);   // 0-15
+    coreScore += (evidence * 1.5); // 0-15
+
+    // Low MFI = more serious (inverse)
+    coreScore += Math.max(0, 10 - mfi);
+
+    // Total score (0-100)
+    const totalScore = Math.min(100, Math.round(behaviorScore + coreScore));
+
+    // Interpretation
+    let description = '';
+    let signalClass = '';
+    if (totalScore >= 75) {
+        description = 'High Confidence: Strong analytical discussion, low noise. Reliable signal.';
+        signalClass = 'bullish';
+    } else if (totalScore >= 50) {
+        description = 'Moderate Confidence: Mixed signals, some quality analysis present.';
+        signalClass = 'neutral';
+    } else {
+        description = 'Low Confidence: High noise, meme-heavy, lacks depth. Unreliable signal.';
+        signalClass = 'bearish';
+    }
+
+    return { score: totalScore, description, signalClass };
+}
+
+/**
+ * Main signal analysis function
+ */
+async function analyzeSignals() {
+    const statusEl = document.getElementById('signal-status');
+    const resultsDiv = document.getElementById('signal-results');
+    const analyzeBtn = document.getElementById('analyze-signals-btn');
+
+    if (!currentPostData || !currentPostData.comments) {
+        statusEl.textContent = 'No Reddit post loaded. Go to "Page Summary" tab first.';
+        statusEl.className = 'text-xs text-red-500 mb-3';
+        return;
+    }
+
+    analyzeBtn.disabled = true;
+    statusEl.textContent = 'Analyzing thread signals...';
+    statusEl.className = 'text-xs text-blue-600 mb-3';
+
+    try {
+        // Step 1: Calculate behavior rhythm metrics
+        statusEl.textContent = 'Calculating behavior rhythm metrics...';
+        const behaviorMetrics = calculateBehaviorRhythm(currentPostData);
+
+        // Display behavior metrics
+        document.getElementById('metric-comment-length').textContent = behaviorMetrics.avgCommentLength;
+        document.getElementById('metric-punctuation').textContent = behaviorMetrics.punctuationChaos;
+        document.getElementById('metric-emoji').textContent = behaviorMetrics.emojiDensity;
+        document.getElementById('metric-comment-score').textContent = behaviorMetrics.commentScoreRatio;
+        document.getElementById('metric-media').textContent = behaviorMetrics.mediaRatio;
+        document.getElementById('metric-caps').textContent = behaviorMetrics.capsIntensity;
+        document.getElementById('metric-edits').textContent = behaviorMetrics.editFrequency;
+        document.getElementById('metric-deleted').textContent = behaviorMetrics.deletedRatio;
+
+        // Step 2: Calculate core metrics with LLM
+        statusEl.textContent = 'Analyzing sentiment with LLM (this may take a few seconds)...';
+        const coreMetrics = await calculateCoreMetrics(currentPostData);
+
+        // Display core metrics
+        document.getElementById('metric-technical').textContent = coreMetrics.technicalDensity;
+        document.getElementById('metric-context').textContent = coreMetrics.contextualDepth;
+        document.getElementById('metric-evidence').textContent = coreMetrics.evidenceVolume;
+        document.getElementById('metric-mfi').textContent = coreMetrics.mfi;
+        document.getElementById('metric-optimism').textContent = coreMetrics.falseOptimism;
+        document.getElementById('metric-capitulation').textContent = coreMetrics.capitulation;
+
+        // Step 3: Calculate confidence score
+        const confidence = calculateConfidenceScore(behaviorMetrics, coreMetrics);
+
+        // Display confidence score
+        document.getElementById('confidence-score').textContent = confidence.score;
+        document.getElementById('confidence-bar').style.width = confidence.score + '%';
+        document.getElementById('confidence-desc').textContent = confidence.description;
+
+        // Investment signal summary
+        const signalPanel = document.getElementById('investment-signal');
+        const signalRec = document.getElementById('signal-recommendation');
+
+        if (confidence.signalClass === 'bullish') {
+            signalPanel.className = 'p-3 rounded-lg border-2 bg-green-50 border-green-300';
+            signalRec.className = 'text-sm text-green-800';
+            signalRec.textContent = `✅ ${confidence.description} Consider as actionable market intelligence.`;
+        } else if (confidence.signalClass === 'neutral') {
+            signalPanel.className = 'p-3 rounded-lg border-2 bg-yellow-50 border-yellow-300';
+            signalRec.className = 'text-sm text-yellow-800';
+            signalRec.textContent = `⚠️ ${confidence.description} Use with caution and cross-reference.`;
+        } else {
+            signalPanel.className = 'p-3 rounded-lg border-2 bg-red-50 border-red-300';
+            signalRec.className = 'text-sm text-red-800';
+            signalRec.textContent = `❌ ${confidence.description} Avoid using for investment decisions.`;
+        }
+
+        // Show results
+        resultsDiv.classList.remove('hidden');
+        statusEl.textContent = '✓ Analysis complete!';
+        statusEl.className = 'text-xs text-green-600 mb-3';
+
+    } catch (error) {
+        console.error('Signal analysis error:', error);
+        statusEl.textContent = '✗ Analysis failed: ' + error.message;
+        statusEl.className = 'text-xs text-red-500 mb-3';
+    } finally {
+        analyzeBtn.disabled = false;
+    }
 }
 
 /**
@@ -374,7 +616,7 @@ function setupEventListeners() {
 
     // Action buttons
     document.getElementById('summarize-btn').addEventListener('click', summarizePage);
-    document.getElementById('calculate-signals-btn').addEventListener('click', calculateSignals);
+    document.getElementById('analyze-signals-btn').addEventListener('click', analyzeSignals);
 
     // Classification method change - re-render visualization
     const methodSelect = document.getElementById('classification-method');
