@@ -362,6 +362,7 @@ function collectAllComments(comments) {
  */
 async function calculateCoreMetrics(postData) {
     if (!GEMINI_CONFIG?.API_KEY) {
+        console.warn('Gemini API key not configured for core metrics');
         return {
             technicalDensity: 'N/A',
             contextualDepth: 'N/A',
@@ -371,6 +372,10 @@ async function calculateCoreMetrics(postData) {
             capitulation: 'N/A'
         };
     }
+
+    // Define API credentials locally
+    const apiKey = GEMINI_CONFIG.API_KEY;
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
 
     const comments = collectAllComments(postData.comments || []);
     const sampleSize = Math.min(50, comments.length);
@@ -405,7 +410,7 @@ Consider:
 Output ONLY the JSON, no explanation.`;
 
     try {
-        const response = await fetch(llmApiUrl + `?key=${apiKey}`, {
+        const response = await fetch(apiUrl + `?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
