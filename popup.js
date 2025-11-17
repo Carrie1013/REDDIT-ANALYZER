@@ -481,39 +481,72 @@ Consider:
 
 Output ONLY the JSON, no explanation.`;
 
-    try {
-        const response = await fetch(apiUrl + `?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    temperature: 0.2,
-                    maxOutputTokens: 200
-                }
-            })
-        });
-
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const result = await response.json();
-        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-
-        // Extract JSON from response
-        const jsonMatch = text.match(/\{[\s\S]*?\}/);
-        if (jsonMatch) {
-            const metrics = JSON.parse(jsonMatch[0]);
-            return {
-                technicalDensity: metrics.technicalDensity?.toFixed(1) || 'N/A',
-                contextualDepth: metrics.contextualDepth?.toFixed(1) || 'N/A',
-                evidenceVolume: metrics.evidenceVolume?.toFixed(1) || 'N/A',
-                mfi: metrics.mfi?.toFixed(1) || 'N/A',
-                falseOptimism: metrics.falseOptimism?.toFixed(1) || 'N/A',
-                capitulation: metrics.capitulation?.toFixed(1) || 'N/A'
-            };
+    const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 200
         }
-    } catch (error) {
-        console.error('Core metrics LLM error:', error);
+    };
+
+    // Exponential backoff retry logic to handle rate limiting (429 errors)
+    for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+            // Add delay before retry attempts to respect rate limits
+            if (attempt > 0) {
+                const delay = 2000 * Math.pow(2, attempt - 1); // 2s, 4s, 8s
+                console.log(`Retry attempt ${attempt} after ${delay}ms delay...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+
+            const response = await fetch(apiUrl + `?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.text();
+                if (response.status === 429) {
+                    console.warn(`Rate limit hit (429) on attempt ${attempt + 1}/4`);
+                    if (attempt === 3) {
+                        throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+                    }
+                    continue; // Retry with exponential backoff
+                }
+                throw new Error(`HTTP ${response.status}: ${errorBody}`);
+            }
+
+            const result = await response.json();
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+
+            // Extract JSON from response
+            const jsonMatch = text.match(/\{[\s\S]*?\}/);
+            if (jsonMatch) {
+                const metrics = JSON.parse(jsonMatch[0]);
+                return {
+                    technicalDensity: metrics.technicalDensity?.toFixed(1) || 'N/A',
+                    contextualDepth: metrics.contextualDepth?.toFixed(1) || 'N/A',
+                    evidenceVolume: metrics.evidenceVolume?.toFixed(1) || 'N/A',
+                    mfi: metrics.mfi?.toFixed(1) || 'N/A',
+                    falseOptimism: metrics.falseOptimism?.toFixed(1) || 'N/A',
+                    capitulation: metrics.capitulation?.toFixed(1) || 'N/A'
+                };
+            }
+        } catch (error) {
+            console.error(`Core metrics LLM error (attempt ${attempt + 1}/4):`, error);
+            if (attempt === 3) {
+                // Final attempt failed
+                return {
+                    technicalDensity: 'Error',
+                    contextualDepth: 'Error',
+                    evidenceVolume: 'Error',
+                    mfi: 'Error',
+                    falseOptimism: 'Error',
+                    capitulation: 'Error: ' + error.message
+                };
+            }
+        }
     }
 
     return {
