@@ -1,10 +1,178 @@
 // --- Global Configuration and Utilities ---
-// API keys are now loaded from config.js (which is gitignored for security)
-// Make sure you've created config.js from config.example.js and added your API keys
+// API keys are loaded from Chrome Storage (configured in options page)
 
-// Load API configuration from config.js
-const apiKey = GEMINI_CONFIG?.API_KEY || "";
-const llmApiUrl = GEMINI_CONFIG?.API_URL || "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+// Global configuration objects (populated from Chrome Storage)
+let REDDIT_CONFIG = {};
+let GEMINI_CONFIG = {};
+
+/**
+ * Load API keys from Chrome Storage
+ * @returns {Promise<boolean>} True if all keys are configured
+ */
+async function loadAPIKeys() {
+    try {
+        const result = await chrome.storage.local.get([
+            'redditClientId',
+            'redditClientSecret',
+            'geminiApiKey'
+        ]);
+
+        // Check if all required keys are present
+        if (!result.redditClientId || !result.redditClientSecret || !result.geminiApiKey) {
+            showAPIKeyWarning();
+            return false;
+        }
+
+        // Populate global config objects
+        REDDIT_CONFIG = {
+            CLIENT_ID: result.redditClientId,
+            CLIENT_SECRET: result.redditClientSecret,
+            USER_AGENT: "chrome:reddit-quant-analyzer:v1.0.0"
+        };
+
+        GEMINI_CONFIG = {
+            API_KEY: result.geminiApiKey,
+            API_URL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent"
+        };
+
+        return true;
+    } catch (error) {
+        console.error('Error loading API keys:', error);
+        showAPIKeyWarning();
+        return false;
+    }
+}
+
+/**
+ * Show warning when API keys are not configured
+ */
+function showAPIKeyWarning() {
+    const summaryStatus = document.getElementById('summary-status');
+    if (summaryStatus) {
+        summaryStatus.innerHTML = `
+            <div class="p-3 bg-yellow-50 rounded border border-yellow-300">
+                <p class="text-sm font-medium text-yellow-800 mb-2">⚠️ API Keys Not Configured</p>
+                <p class="text-xs text-yellow-700 mb-2">Please configure your Reddit and Gemini API keys to use this extension.</p>
+                <button id="open-settings-btn" class="text-xs bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700">
+                    Open Settings
+                </button>
+            </div>
+        `;
+
+        // Add click handler to open settings
+        document.getElementById('open-settings-btn')?.addEventListener('click', () => {
+            chrome.runtime.openOptionsPage();
+        });
+    }
+}
+
+/**
+ * Check daily usage limit
+ * @returns {Promise<Object>} Usage limit status
+ */
+async function checkDailyLimit() {
+    const today = new Date().toDateString();
+    const result = await chrome.storage.local.get(['usageDate', 'usageCount']);
+
+    // Reset counter if new day
+    if (result.usageDate !== today) {
+        await chrome.storage.local.set({
+            usageDate: today,
+            usageCount: 0
+        });
+        return { allowed: true, remaining: 10, count: 0 };
+    }
+
+    const count = result.usageCount || 0;
+    const limit = 10; // Daily limit
+
+    if (count >= limit) {
+        return {
+            allowed: false,
+            remaining: 0,
+            count: count,
+            message: `Daily limit reached (${limit} analyses per day). Resets at midnight.`
+        };
+    }
+
+    return { allowed: true, remaining: limit - count, count: count };
+}
+
+/**
+ * Increment daily usage count
+ */
+async function incrementUsageCount() {
+    const result = await chrome.storage.local.get(['usageCount']);
+    const newCount = (result.usageCount || 0) + 1;
+    await chrome.storage.local.set({ usageCount: newCount });
+    return newCount;
+}
+
+/**
+ * Get cached analysis for a post
+ * @param {string} postId - Reddit post ID
+ * @returns {Promise<Object|null>} Cached data or null
+ */
+async function getCachedAnalysis(postId) {
+    const cacheKey = `cache_${postId}`;
+    const result = await chrome.storage.local.get([cacheKey]);
+
+    if (result[cacheKey]) {
+        const cached = result[cacheKey];
+        const ageHours = (Date.now() - cached.timestamp) / (1000 * 60 * 60);
+
+        // Cache expires after 24 hours
+        if (ageHours < 24) {
+            console.log(`✓ Loaded from cache (age: ${ageHours.toFixed(1)}h)`);
+            return cached.data;
+        } else {
+            // Remove expired cache
+            await chrome.storage.local.remove(cacheKey);
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Save analysis to cache
+ * @param {string} postId - Reddit post ID
+ * @param {Object} analysisData - Analysis results to cache
+ */
+async function saveCachedAnalysis(postId, analysisData) {
+    const cacheKey = `cache_${postId}`;
+    await chrome.storage.local.set({
+        [cacheKey]: {
+            timestamp: Date.now(),
+            data: analysisData
+        }
+    });
+    console.log(`✓ Saved to cache: ${postId}`);
+}
+
+/**
+ * Clean old cache entries (older than 7 days)
+ */
+async function cleanOldCache() {
+    const allData = await chrome.storage.local.get(null);
+    const now = Date.now();
+    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+    let cleanedCount = 0;
+
+    for (const key in allData) {
+        if (key.startsWith('cache_')) {
+            const ageMs = now - allData[key].timestamp;
+            if (ageMs > maxAge) {
+                await chrome.storage.local.remove(key);
+                cleanedCount++;
+            }
+        }
+    }
+
+    if (cleanedCount > 0) {
+        console.log(`🗑️ Cleaned ${cleanedCount} old cache entries`);
+    }
+}
 
 function openTab(tabId) {
     // Toggle tab content visibility
@@ -95,8 +263,39 @@ async function autoGenerateSummary(postData) {
         return;
     }
 
+    const postId = postData.id;
+
+    // Check cache first
+    const cached = await getCachedAnalysis(postId);
+    if (cached && cached.summary) {
+        console.log('✓ Using cached summary');
+        resultDiv.innerHTML = markdownToHtml(cached.summary);
+        statusDiv.innerHTML = `
+            <p class="text-xs text-green-600">✓ Loaded from cache (no API usage)</p>
+            <p class="text-xs text-gray-500">Cache age: ${((Date.now() - cached.cacheTime) / (1000 * 60 * 60)).toFixed(1)}h</p>
+        `;
+        return;
+    }
+
+    // Check daily limit before making API call
+    const limitStatus = await checkDailyLimit();
+    if (!limitStatus.allowed) {
+        resultDiv.innerHTML = `
+            <div class="p-3 bg-red-50 rounded border border-red-300">
+                <p class="text-sm font-medium text-red-800">⚠️ Daily Limit Reached</p>
+                <p class="text-xs text-red-700 mt-1">${limitStatus.message}</p>
+                <p class="text-xs text-gray-600 mt-2">Tip: Cached analyses don't count toward your limit!</p>
+            </div>
+        `;
+        statusDiv.innerHTML = `<p class="text-xs text-red-600">Usage: ${limitStatus.count}/10</p>`;
+        return;
+    }
+
     // Update status to show data source
-    statusDiv.innerHTML = '<p class="text-xs text-green-600">✓ Fetched through Reddit API</p>';
+    statusDiv.innerHTML = `
+        <p class="text-xs text-green-600">✓ Fetched through Reddit API</p>
+        <p class="text-xs text-gray-500">Remaining today: ${limitStatus.remaining}/10</p>
+    `;
 
     resultDiv.innerHTML = '<span class="text-blue-500">Generating summary with LLM, please wait...</span>';
 
@@ -128,6 +327,9 @@ ${sampleComments.substring(0, 4000)}
     // Exponential backoff retry logic
     for (let i = 0; i < 3; i++) {
         try {
+            const apiKey = GEMINI_CONFIG.API_KEY;
+            const llmApiUrl = GEMINI_CONFIG.API_URL;
+
             const response = await fetch(llmApiUrl + `?key=${apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -143,6 +345,23 @@ ${sampleComments.substring(0, 4000)}
 
             // Convert markdown to HTML for proper display
             resultDiv.innerHTML = markdownToHtml(text);
+
+            // Increment usage count
+            await incrementUsageCount();
+            const newLimitStatus = await checkDailyLimit();
+            statusDiv.innerHTML = `
+                <p class="text-xs text-green-600">✓ Summary generated successfully</p>
+                <p class="text-xs text-gray-500">Remaining today: ${newLimitStatus.remaining}/10</p>
+            `;
+
+            // Save to cache
+            await saveCachedAnalysis(postId, {
+                summary: text,
+                postData: postData,
+                cacheTime: Date.now()
+            });
+
+            console.log(`✓ Summary generated and cached for post ${postId}`);
             break;
 
         } catch (error) {
@@ -781,3 +1000,47 @@ async function preloadActiveTabContent() {
         setStatus('Error loading page. Please navigate to a Reddit thread (reddit.com/r/.../comments/...).', 'text-red-500');
     }
 }
+
+// --- Extension Initialization ---
+
+/**
+ * Initialize extension when popup opens
+ */
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Reddit Quant Signal Analyzer initializing...');
+
+    // Load API keys from Chrome Storage
+    const keysLoaded = await loadAPIKeys();
+
+    if (!keysLoaded) {
+        console.warn('⚠️ API keys not configured');
+        // Warning UI is already shown by showAPIKeyWarning()
+        return;
+    }
+
+    console.log('✓ API keys loaded successfully');
+
+    // Clean old cache entries
+    cleanOldCache();
+
+    // Check and display daily usage limit
+    const limitStatus = await checkDailyLimit();
+    console.log(`📊 Daily usage: ${limitStatus.count}/10 (${limitStatus.remaining} remaining)`);
+
+    // Update UI with remaining analyses
+    const summaryStatus = document.getElementById('summary-status');
+    if (summaryStatus && limitStatus.remaining < 10) {
+        const originalHTML = summaryStatus.innerHTML;
+        summaryStatus.innerHTML = `
+            <div class="flex justify-between items-center">
+                <span class="text-xs text-gray-600">Daily analyses remaining: <strong>${limitStatus.remaining}/10</strong></span>
+            </div>
+            ${originalHTML}
+        `;
+    }
+
+    // Load current tab content
+    loadTabContent();
+
+    console.log('✓ Extension initialized successfully');
+});

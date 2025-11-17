@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddit Quant Analyzer - Settings</title>
+    <link rel="stylesheet" href="tailwind.min.css">
+    <style>
+        body {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body class="p-8 bg-gray-50">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">Reddit Quant Signal Analyzer</h1>
+        <p class="text-gray-600">Configure your API credentials to start analyzing Reddit discussions</p>
+    </div>
+
+    <!-- API Configuration -->
+    <div class="bg-white p-6 rounded-lg shadow-lg mb-6">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">API Configuration</h2>
+
+        <!-- Reddit API Section -->
+        <div class="mb-6">
+            <h3 class="text-lg font-medium text-gray-700 mb-3">Reddit API Credentials</h3>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Client ID *</label>
+                <input
+                    type="text"
+                    id="reddit-client-id"
+                    placeholder="Enter your Reddit Client ID"
+                    class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <p class="text-xs text-gray-500 mt-1">Found under "personal use script" on Reddit apps page</p>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Client Secret *</label>
+                <input
+                    type="password"
+                    id="reddit-client-secret"
+                    placeholder="Enter your Reddit Client Secret"
+                    class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <p class="text-xs text-gray-500 mt-1">Found under "secret" on Reddit apps page</p>
+            </div>
+
+            <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p class="text-sm font-medium text-blue-800 mb-2">📖 How to get Reddit API credentials:</p>
+                <ol class="text-sm text-blue-700 space-y-1 ml-4 list-decimal">
+                    <li>Visit <a href="https://www.reddit.com/prefs/apps" target="_blank" class="underline font-medium">reddit.com/prefs/apps</a></li>
+                    <li>Click "Create App" or "Create Another App"</li>
+                    <li>Choose type: <strong>"script"</strong></li>
+                    <li>Fill in name and description (any text)</li>
+                    <li>Set redirect URI to: <code class="bg-blue-100 px-1 rounded">http://localhost:8080</code></li>
+                    <li>Click "Create app"</li>
+                    <li>Copy the Client ID (under app name) and Secret</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Gemini API Section -->
+        <div class="mb-6">
+            <h3 class="text-lg font-medium text-gray-700 mb-3">Google Gemini API Key</h3>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">API Key *</label>
+                <input
+                    type="password"
+                    id="gemini-api-key"
+                    placeholder="Enter your Gemini API Key"
+                    class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <p class="text-xs text-gray-500 mt-1">Required for AI-powered analysis and LLM features</p>
+            </div>
+
+            <div class="p-3 bg-green-50 rounded-lg border border-green-200">
+                <p class="text-sm font-medium text-green-800 mb-2">📖 How to get Gemini API key:</p>
+                <ol class="text-sm text-green-700 space-y-1 ml-4 list-decimal">
+                    <li>Visit <a href="https://makersuite.google.com/app/apikey" target="_blank" class="underline font-medium">makersuite.google.com/app/apikey</a></li>
+                    <li>Sign in with your Google account</li>
+                    <li>Click "Create API Key"</li>
+                    <li>Copy the generated key</li>
+                </ol>
+                <p class="text-xs text-green-600 mt-2">💡 Free tier includes generous usage limits</p>
+            </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="flex items-center gap-4">
+            <button
+                id="save-btn"
+                class="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition duration-150 shadow-md">
+                💾 Save Settings
+            </button>
+
+            <button
+                id="test-btn"
+                class="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-300 transition duration-150">
+                🧪 Test Connection
+            </button>
+
+            <div id="status" class="hidden">
+                <span class="text-green-600 font-medium">✓ Settings saved successfully!</span>
+            </div>
+
+            <div id="error" class="hidden">
+                <span class="text-red-600 font-medium">✗ Please fill in all required fields</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Usage Statistics -->
+    <div class="bg-white p-6 rounded-lg shadow-lg mb-6">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">Usage Statistics</h2>
+
+        <div class="grid grid-cols-3 gap-4">
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+                <p class="text-sm text-gray-600 mb-1">Today's Analyses</p>
+                <p class="text-3xl font-bold text-blue-700" id="usage-today">0</p>
+                <p class="text-xs text-gray-500 mt-1">Limit: 10/day</p>
+            </div>
+
+            <div class="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
+                <p class="text-sm text-gray-600 mb-1">Cached Posts</p>
+                <p class="text-3xl font-bold text-green-700" id="cache-count">0</p>
+                <p class="text-xs text-gray-500 mt-1">No API usage</p>
+            </div>
+
+            <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+                <p class="text-sm text-gray-600 mb-1">Remaining Today</p>
+                <p class="text-3xl font-bold text-purple-700" id="remaining-today">10</p>
+                <p class="text-xs text-gray-500 mt-1">Resets at midnight</p>
+            </div>
+        </div>
+
+        <div class="mt-4 flex gap-2">
+            <button
+                id="clear-cache-btn"
+                class="text-sm bg-gray-100 text-gray-700 px-4 py-2 rounded hover:bg-gray-200 transition">
+                🗑️ Clear Cache
+            </button>
+            <button
+                id="reset-usage-btn"
+                class="text-sm bg-gray-100 text-gray-700 px-4 py-2 rounded hover:bg-gray-200 transition">
+                🔄 Reset Daily Count (Dev Only)
+            </button>
+        </div>
+    </div>
+
+    <!-- Privacy & Security -->
+    <div class="bg-white p-6 rounded-lg shadow-lg mb-6">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">🔒 Privacy & Security</h2>
+
+        <div class="space-y-3 text-sm text-gray-700">
+            <div class="flex items-start gap-2">
+                <span class="text-green-600 mt-1">✓</span>
+                <p><strong>Local Storage Only:</strong> All API keys are stored securely in Chrome's local storage and never transmitted to third parties.</p>
+            </div>
+
+            <div class="flex items-start gap-2">
+                <span class="text-green-600 mt-1">✓</span>
+                <p><strong>Direct API Calls:</strong> This extension communicates directly with Reddit and Gemini APIs from your browser.</p>
+            </div>
+
+            <div class="flex items-start gap-2">
+                <span class="text-green-600 mt-1">✓</span>
+                <p><strong>No Data Collection:</strong> We do not collect, store, or transmit any of your personal data or browsing history.</p>
+            </div>
+
+            <div class="flex items-start gap-2">
+                <span class="text-green-600 mt-1">✓</span>
+                <p><strong>Open Source:</strong> Full source code available on <a href="https://github.com/Carrie1013/REDDIT-ANALYZER" target="_blank" class="text-blue-600 underline">GitHub</a> for transparency.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center text-sm text-gray-500 pb-8">
+        <p>Reddit Quant Signal Analyzer v1.0.0</p>
+        <p class="mt-1">
+            <a href="https://github.com/Carrie1013/REDDIT-ANALYZER" target="_blank" class="text-blue-600 hover:underline">GitHub</a> ·
+            <a href="https://github.com/Carrie1013/REDDIT-ANALYZER/issues" target="_blank" class="text-blue-600 hover:underline">Report Issue</a>
+        </p>
+    </div>
+
+    <script src="options.js"></script>
+</body>
+</html>

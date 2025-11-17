@@ -54,13 +54,39 @@ Reddit Quant Signal Analyzer bridges this gap by providing a comprehensive Chrom
 
 ## Quick Start
 
+### For End Users (Chrome Web Store)
+
+**📥 Install from Chrome Web Store** (Coming Soon)
+
+Once installed:
+
+1. **Right-click the extension icon** → Select **"Options"**
+2. **Get Free API Keys** (takes 5 minutes):
+   - Reddit API: https://www.reddit.com/prefs/apps
+   - Gemini API: https://makersuite.google.com/app/apikey
+3. **Enter keys in settings** and click "Save"
+4. **Visit any Reddit post** and click the extension icon
+
+📖 **[Detailed Setup Guide →](SETUP.md)**
+
+### Features at a Glance
+
+- ✅ **10 free analyses per day** (resets at midnight)
+- ✅ **Cached posts don't count** toward limit
+- ✅ **No credit card required** - both APIs have free tiers
+- ✅ **Privacy-first** - all data stays local
+
+---
+
+## For Developers (Local Installation)
+
 ### Prerequisites
 
 - Google Chrome browser
 - Reddit API credentials (free)
 - Google Gemini API key (free tier available)
 
-### Installation
+### Installation Steps
 
 #### Step 1: Clone the Repository
 
@@ -69,46 +95,30 @@ git clone https://github.com/Carrie1013/REDDIT-ANALYZER.git
 cd REDDIT-ANALYZER
 ```
 
-#### Step 2: Configure API Credentials
-
-1. Copy the example configuration file:
-   ```bash
-   cp config.example.js config.js
-   ```
-
-2. Edit `config.js` and add your credentials:
-   ```javascript
-   const REDDIT_CONFIG = {
-       CLIENT_ID: "YOUR_REDDIT_CLIENT_ID_HERE",
-       CLIENT_SECRET: "YOUR_REDDIT_CLIENT_SECRET_HERE",
-       USER_AGENT: "chrome:reddit-quant-analyzer:v1.0.0 (by /u/YourUsername)"
-   };
-
-   const GEMINI_CONFIG = {
-       API_KEY: "YOUR_GEMINI_API_KEY_HERE",
-       API_URL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent"
-   };
-   ```
-
-3. **Get Reddit API Credentials**:
-   - Go to https://www.reddit.com/prefs/apps
-   - Click "Create App" or "Create Another App"
-   - Choose "script" type
-   - Fill in the details
-   - Copy your `client_id` and `client_secret`
-
-4. **Get Gemini API Key**:
-   - Visit https://makersuite.google.com/app/apikey
-   - Generate a free API key
-   - Copy the key to your `config.js`
-
-#### Step 3: Load Extension in Chrome
+#### Step 2: Load Extension in Chrome
 
 1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable "Developer mode" (toggle in top-right corner)
-3. Click "Load unpacked"
+2. Enable **"Developer mode"** (toggle in top-right corner)
+3. Click **"Load unpacked"**
 4. Select the `REDDIT-ANALYZER` folder
 5. The extension icon should appear in your toolbar
+
+#### Step 3: Configure API Keys
+
+1. **Click the extension icon**
+2. Click **"Open Settings"** button
+3. Enter your API credentials:
+
+**Get Reddit API Credentials**:
+- Go to https://www.reddit.com/prefs/apps
+- Click "Create App" → Select **"script"** type
+- Copy `client_id` and `client_secret`
+
+**Get Gemini API Key**:
+- Visit https://makersuite.google.com/app/apikey
+- Generate a free API key
+
+4. **Save and test** your configuration
 
 ---
 

@@ -1,13 +1,15 @@
 {
     "manifest_version": 3,
     "name": "Reddit Quant Signal Analyzer",
-    "version": "1.0",
-    "description": "Analyzes Reddit content structure and non-traditional investment signals.",
+    "version": "1.0.0",
+    "description": "Analyze Reddit discussions for investment signals with AI and 3D visualization",
     "permissions": [
       "activeTab",
       "scripting",
-      "tabs"
+      "tabs",
+      "storage"
     ],
+    "options_page": "options.html",
     "action": {
       "default_popup": "popup.html",
       "default_icon": {
